@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -265,6 +266,29 @@ def render_rail(sections: list[Section], tag_counts: dict[str, int]) -> str:
     return "\n".join(out)
 
 
+FALLBACK_DEFAULT_IMAGE = "assets/placeholder.svg"
+
+
+def resolve_default_image(cfg, diags: Diagnostics) -> str:
+    """Validate cfg.default_image as a path inside src/; fall back if broken.
+
+    The returned value is a src/-relative POSIX path — usable directly as the
+    hosted URL because copy_src() mirrors src/ into the output directory.
+    """
+    rel = (cfg.default_image or "").strip().replace("\\", "/")
+    if not rel:
+        return FALLBACK_DEFAULT_IMAGE
+    candidate = (SRC_DIR / rel).resolve()
+    inside_src = str(candidate).startswith(str(SRC_DIR.resolve()) + os.sep)
+    if not inside_src or not candidate.is_file():
+        diags.warn(
+            f"config: default_image {cfg.default_image!r} is not a file under src/; "
+            f"using {FALLBACK_DEFAULT_IMAGE}"
+        )
+        return FALLBACK_DEFAULT_IMAGE
+    return rel
+
+
 def data_uri(path: Path) -> str:
     mime = MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
@@ -278,9 +302,9 @@ def inline_json(payload: dict) -> str:
 
 
 def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
-                standalone: bool, single_file: bool, out_dir: Path) -> str:
+                standalone: bool, single_file: bool, out_dir: Path,
+                placeholder_url: str) -> str:
     if standalone:
-        placeholder_url = data_uri(SRC_DIR / "assets" / "placeholder.svg")
         favicon = f'<link rel="icon" href="{data_uri(SRC_DIR / "favicon.svg")}" type="image/svg+xml">'
         css = (SRC_DIR / "assets" / "app.css").read_text(encoding="utf-8")
         styles = f"<style>\n{css}\n</style>"
@@ -288,7 +312,6 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
         scripts = "<script>\n" + (SRC_DIR / "assets" / "app.js").read_text(encoding="utf-8") + "\n</script>"
         csp = ""
     else:
-        placeholder_url = "assets/placeholder.svg"
         favicon = '<link rel="icon" href="./favicon.svg" type="image/svg+xml">'
         styles = '<link rel="stylesheet" href="./assets/app.css">'
         theme_init = '<script src="./assets/theme-init.js"></script>'
@@ -321,6 +344,11 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
         "{{DATA}}": data_block,
         "{{SCRIPTS}}": scripts,
         "{{ITEM_TOTAL}}": str(len(index["items"])),
+        # Help dialog: baked from config so the text stays correct when the
+        # content repo, topic name or manifest path are reconfigured.
+        "{{TOPIC_NAME}}": escape_html(cfg.topic_name),
+        "{{TOPIC_MANIFEST_PATH}}": escape_html(cfg.topic_manifest_path),
+        "{{CONTENT_REPO_URL}}": escape_html(cfg.content_repo_url.removesuffix(".git")),
     }
     for token, value in replacements.items():
         html = html.replace(token, value)
@@ -429,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     diags = Diagnostics()
     for msg in config_notices:
         diags.notice(msg)
+    default_image_rel = resolve_default_image(cfg, diags)
 
     # 1-2. Acquire (done by CI) + discover.
     content_dir = Path(args.content_dir)
@@ -505,6 +534,7 @@ def main(argv: list[str] | None = None) -> int:
     hosted_html = render_page(
         template, cfg=cfg, index=index, sections=sections, tag_counts=tag_counts,
         standalone=False, single_file=False, out_dir=out_dir,
+        placeholder_url=default_image_rel,
     )
     (out_dir / "index.html").write_text(hosted_html, encoding="utf-8")
 
@@ -516,9 +546,17 @@ def main(argv: list[str] | None = None) -> int:
         media_src = out_dir / "media"
         if media_src.is_dir():
             shutil.copytree(media_src, dist_dir / "media")
+        # The default image ships as a media/ file rather than a data URI:
+        # it may be a large raster, and a data URI would be repeated in every
+        # imageless tile. media/ is already the standalone file's one sibling.
+        default_src = SRC_DIR / default_image_rel
+        standalone_placeholder = f"media/gallery-default{default_src.suffix.lower()}"
+        (dist_dir / "media").mkdir(exist_ok=True)
+        shutil.copyfile(default_src, dist_dir / standalone_placeholder)
         standalone_html = render_page(
             template, cfg=cfg, index=index, sections=sections, tag_counts=tag_counts,
             standalone=True, single_file=args.single_file, out_dir=dist_dir,
+            placeholder_url=standalone_placeholder,
         )
         target = dist_dir / "index.html"
         target.write_text(standalone_html, encoding="utf-8")

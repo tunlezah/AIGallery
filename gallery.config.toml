@@ -5,7 +5,7 @@ content_repo_url = "https://gitlab.com/example-group/ai-gallery-content.git"
 content_repo_ref = "main"          # branch, tag, or commit SHA
 content_subdir   = "."             # path within the content repo to treat as root
 
-default_image    = "assets/placeholder.svg"
+default_image    = "assets/AIGallery.png"   # used when an item/topic project has no image
 default_sort     = "order"         # order | title | added | updated
 cards_per_page   = 0               # 0 = render all; >0 = paginate incrementally
 

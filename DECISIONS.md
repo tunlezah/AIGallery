@@ -53,9 +53,12 @@ Measured values (columns, contrast) are at the end.
 - **The inline JSON block escapes every `<` as `<`**, which covers both
   `</script` and `<!--` in one rule and keeps the payload valid JSON.
 - **Item with no image:** `image`/`thumb` are `null` in the index; the baked
-  HTML references the placeholder directly (hosted: `assets/placeholder.svg`;
-  standalone: a data URI, so `media/` stays the only sibling the standalone
-  file needs).
+  HTML references the configured `default_image` directly (hosted:
+  `assets/AIGallery.png`; standalone: a `media/gallery-default.*` copy —
+  a data URI would be repeated per imageless tile, and `media/` is already
+  the only sibling the standalone file needs). A `default_image` that is
+  missing or escapes `src/` warns and falls back to `assets/placeholder.svg`,
+  which also stays as the JS-side last resort for images that 404 at runtime.
 - **`cards_per_page > 0` is implemented as incremental reveal** (first N tiles
   shown, IntersectionObserver sentinel reveals the rest chunk-by-chunk) rather
   than discrete pages: real pagination would fight hash-based filter state,
@@ -84,6 +87,11 @@ Measured values (columns, contrast) are at the end.
   on the backdrop — which closes the panel. The user-visible behaviour
   ("click the gear again to close") therefore works; keyboard users have
   Escape and the close button. Verified in the browser pass.
+- **The help dialog shares the settings dialog's pattern** (`.app-dialog`
+  base class, one `wireDialog()` helper for both): same toggle-under-modal
+  behaviour, backdrop close and focus return. Its content-repo link, topic
+  name and manifest path are `{{...}}` slots substituted from config at
+  build time, so reconfiguring the gallery cannot leave the help text stale.
 - **Chip overflow (`+N`)** is baked at build time (first 3 chips + indicator
   with the full list in `title` and visually-hidden text); all tags remain in
   the search index and the rail.

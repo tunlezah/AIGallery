@@ -1,0 +1,12 @@
+# Build outputs
+/public/
+/dist/
+
+# Working trees made by CI / local builds
+/.content/
+/.topics/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/

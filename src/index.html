@@ -24,6 +24,10 @@
       <label class="visually-hidden" for="search">Search the gallery</label>
       <input type="search" id="search" placeholder="Search&hellip; (press /)" autocomplete="off" spellcheck="false">
     </div>
+    <button type="button" class="help-button" id="help-button" aria-haspopup="dialog">
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7.6 7.8a2.4 2.4 0 1 1 3.5 2.12c-.74.39-1.1.88-1.1 1.68v.25" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14.5" r="1.05" fill="currentColor"/></svg>
+      <span class="visually-hidden">Help</span>
+    </button>
     <button type="button" class="settings-button" id="settings-button" aria-haspopup="dialog">
       <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M10 6.5A3.5 3.5 0 1 0 10 13.5 3.5 3.5 0 0 0 10 6.5Zm7.4 3.5c0-.5-.05-.94-.13-1.4l2-1.55-1.85-3.2-2.35.95a7.4 7.4 0 0 0-2.42-1.4L12.3.5H8.6l-.35 2.5a7.4 7.4 0 0 0-2.42 1.4l-2.35-.95-1.85 3.2 2 1.55c-.08.46-.13.93-.13 1.4s.05.94.13 1.4l-2 1.55 1.85 3.2 2.35-.95c.72.6 1.54 1.08 2.42 1.4l.35 2.5h3.7l.35-2.5a7.4 7.4 0 0 0 2.42-1.4l2.35.95 1.85-3.2-2-1.55c.08-.46.13-.93.13-1.4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
       <span class="visually-hidden">Settings</span>
@@ -42,7 +46,7 @@
   </aside>
   <main id="main" class="main">
     <p class="result-count" id="result-count" aria-live="polite">Showing <span class="count-num" id="count-num">{{ITEM_TOTAL}}</span> of {{ITEM_TOTAL}} items</p>
-    <noscript><p class="noscript-note">Search, filtering, the More/Less controls and the settings panel need JavaScript, which is disabled — every item below is shown fully expanded instead.</p></noscript>
+    <noscript><p class="noscript-note">Search, filtering, the More/Less controls and the help and settings panels need JavaScript, which is disabled — every item below is shown fully expanded instead.</p></noscript>
     <div class="empty-state" id="empty-state" hidden>
       <p>No items match the current filters.</p>
       <button type="button" class="reset-filters" id="reset-filters">Reset filters</button>
@@ -63,7 +67,41 @@
     <text x="40" y="31" font-family="monospace" font-size="8" fill="#111111">best viewed in ANY browser</text>
   </svg>
 </footer>
-<dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+<dialog class="app-dialog help-dialog" id="help-dialog" aria-labelledby="help-title">
+  <div class="dialog-inner">
+    <div class="dialog-head">
+      <h2 id="help-title">Help: getting into the gallery</h2>
+      <button type="button" class="dialog-close" id="help-close">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="visually-hidden">Close help</span>
+      </button>
+    </div>
+    <section class="help-section">
+      <h3>Add or edit a curated item</h3>
+      <p>Curated items live in the <a href="{{CONTENT_REPO_URL}}" target="_blank" rel="noopener noreferrer">content repository</a>, not in this site&#8217;s repo. Each top-level directory is a section; a directory one level below it becomes a gallery item when it contains an <code>index.md</code>:</p>
+      <pre><code>tooling/                  &lt;- section
+&#9492;&#9472; my-tool/              &lt;- item
+   &#9500;&#9472; index.md           &lt;- required
+   &#9492;&#9472; cover.png          &lt;- optional image</code></pre>
+      <p><code>index.md</code> is YAML frontmatter plus a Markdown body shown on the card:</p>
+      <pre><code>---
+title: "My Tool"          # required
+url: "https://example.com"
+image: "cover.png"        # omit to use the gallery default image
+tags: ["local", "cli"]
+summary: "One line, up to 200 chars."
+---
+Free Markdown body.</code></pre>
+      <p>To modify an existing item, edit its <code>index.md</code> (or replace its image) and open a merge request on the content repository. To remove one, delete its directory or set <code>draft: true</code>.</p>
+    </section>
+    <section class="help-section">
+      <h3>Host your own item via a GitLab topic</h3>
+      <p>Any project on this GitLab instance can list itself &#8212; no merge request needed. Under your project&#8217;s <strong>Settings &#8594; General &#8594; Topics</strong>, add the topic <code>{{TOPIC_NAME}}</code>. The project&#8217;s name, description, avatar and other topics become the card, which appears in the gallery&#8217;s subscribed section on the next scheduled build. Projects without an avatar get the gallery default image.</p>
+      <p>For more control, commit a manifest at <code>{{TOPIC_MANIFEST_PATH}}</code> on your default branch, using the same frontmatter format as a curated item &#8212; its fields override the derived metadata, and its body becomes the card body. Remove the topic to leave the gallery.</p>
+    </section>
+  </div>
+</dialog>
+<dialog class="app-dialog settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-inner">
     <div class="dialog-head">
       <h2 id="settings-title">Settings</h2>
