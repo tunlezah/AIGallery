@@ -1,0 +1,65 @@
+# AI Gallery — GitLab Pages pipeline.
+#
+#   test  – generator unit tests (merge requests + default branch)
+#   pages – clone the content repo, fetch the topic feed (never fatal),
+#           build the hosted + standalone targets, smoke-check the output,
+#           and publish public/ to GitLab Pages.
+#
+# Optional CI/CD variables (Settings → CI/CD → Variables, masked):
+#   CONTENT_REPO_USER / CONTENT_REPO_TOKEN   deploy or project access token
+#                                            (read_repository scope only) for
+#                                            a private content repo
+#   GALLERY_TOPIC_TOKEN                      read_api-scope token so the topic
+#                                            feed sees internal/private projects
+# Any gallery.config.toml key can be overridden with GALLERY_<KEY>, e.g.
+# GALLERY_CONTENT_REPO_URL or GALLERY_TOPIC_NAME.
+
+image: python:3.12-slim
+
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - pip install --no-cache-dir -r build/requirements.txt
+    - python -m unittest discover -s build/tests -v
+
+pages:
+  stage: deploy
+  rules:
+    # Covers pushes to the default branch, scheduled pipelines, and
+    # API-triggered rebuilds (the content repo's notify-gallery job).
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates > /dev/null
+    - pip install --no-cache-dir -r build/requirements.txt
+  script:
+    # 1. Clone the content repository at the configured ref.
+    - CONTENT_URL="${GALLERY_CONTENT_REPO_URL:-$(python -c 'import tomllib; print(tomllib.load(open("gallery.config.toml", "rb"))["content_repo_url"])')}"
+    - CONTENT_REF="${GALLERY_CONTENT_REPO_REF:-$(python -c 'import tomllib; print(tomllib.load(open("gallery.config.toml", "rb")).get("content_repo_ref", "main"))')}"
+    # Token (if any) is spliced into the clone URL only; GitLab logs show the
+    # script as written, and the smoke check scans the output for leaks.
+    - |
+      if [ -n "${CONTENT_REPO_TOKEN:-}" ]; then
+        CLONE_URL="https://${CONTENT_REPO_USER:-token}:${CONTENT_REPO_TOKEN}@${CONTENT_URL#https://}"
+      else
+        CLONE_URL="$CONTENT_URL"
+      fi
+    - git clone --quiet "$CLONE_URL" .content
+    - git -C .content checkout --quiet "$CONTENT_REF"
+    # 2. Topic feed — the only network step of the build; can never fail.
+    - python build/fetch_topic.py || true
+    # 3. Build both targets from one code path.
+    - python build/generate.py --standalone
+    # 4. Smoke-check: index parses, items non-empty, referenced media exist,
+    #    no token value appears anywhere in the output.
+    - python build/smoke_check.py public dist
+  artifacts:
+    paths:
+      - public
+      - dist/standalone

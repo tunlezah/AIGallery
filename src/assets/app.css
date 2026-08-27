@@ -223,7 +223,7 @@ button { font: inherit; color: inherit; }
   border-radius: calc(var(--radius) * 2);
 }
 #search::placeholder { color: var(--muted); opacity: 1; }
-.settings-button, .rail-toggle {
+.settings-button, .help-button, .rail-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -235,7 +235,7 @@ button { font: inherit; color: inherit; }
   border-radius: var(--radius);
   cursor: pointer;
 }
-.settings-button:hover, .rail-toggle:hover { border-color: var(--border); }
+.settings-button:hover, .help-button:hover, .rail-toggle:hover { border-color: var(--border); }
 .rail-toggle { display: none; }
 
 /* GeoCities marquee-style welcome banner (CSS animation, no marquee tag) */
@@ -602,9 +602,9 @@ button { font: inherit; color: inherit; }
 [data-theme="geocities"] .construction-badge { display: block; margin-top: 0.75rem; }
 
 /* ==========================================================================
-   Settings dialog
+   Dialogs (settings + help share the pattern)
    ========================================================================== */
-.settings-dialog {
+.app-dialog {
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -614,8 +614,8 @@ button { font: inherit; color: inherit; }
   width: calc(100vw - 2rem);
   box-shadow: var(--shadow);
 }
-[data-theme="geocities"] .settings-dialog { border: 4px ridge #ff00ff; }
-.settings-dialog::backdrop { background: rgba(10, 12, 16, 0.55); }
+[data-theme="geocities"] .app-dialog { border: 4px ridge #ff00ff; }
+.app-dialog::backdrop { background: rgba(10, 12, 16, 0.55); }
 .dialog-inner { padding: 1rem 1.25rem 1.25rem; }
 .dialog-head {
   display: flex;
@@ -652,6 +652,37 @@ button { font: inherit; color: inherit; }
 }
 .settings-option { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; cursor: pointer; }
 .settings-option input { accent-color: var(--accent); }
+
+/* Help dialog: wider, scrollable, prose + code samples */
+.help-dialog {
+  max-width: 36rem;
+  max-height: min(85vh, 42rem);
+  overflow: auto;
+}
+.help-section { margin: 0 0 1rem; }
+.help-section:last-child { margin-bottom: 0; }
+.help-section h3 {
+  margin: 0.8em 0 0.35em;
+  font-family: var(--heading-font);
+  font-size: 1rem;
+}
+.help-section p { margin: 0 0 0.6em; font-size: 0.9rem; }
+.help-section code {
+  font-family: var(--mono-font);
+  font-size: 0.85em;
+  background: var(--chip-bg);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+.help-section pre {
+  overflow-x: auto;
+  background: var(--chip-bg);
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.help-section pre code { background: transparent; padding: 0; }
 
 /* ==========================================================================
    Responsive: rail becomes a drawer

@@ -51,6 +51,15 @@ draft: false                         # true = excluded from the build
 Free Markdown body. Shown on the card, clamped, with a More/Less control.
 ```
 
+An item with no `image` (and a topic project with no avatar) gets the
+gallery's default image — `default_image` in `gallery.config.toml`, which
+ships as `src/assets/AIGallery.png`. Every card image is rendered inside a
+fixed 4:3 media box (`object-fit: cover`), so any image size or aspect ratio
+displays at the same standard tile size. The header's **?** button opens a
+help dialog explaining both contribution paths (content repo MR, or the
+GitLab topic); its repo link, topic name and manifest path are baked from
+the config at build time.
+
 Validation is strict where it matters: a missing `title`, a malformed YAML
 block, a `javascript:` URL, an image path that escapes the item directory,
 or a duplicate slug within a section **fails the build** with the file named.
@@ -130,7 +139,7 @@ data URIs for a one-file gallery).
 
 CI attaches `dist/standalone/` as an artifact. Download it, keep
 `index.html` next to its `media/` folder, and double-click the HTML — the
-full gallery (search, filters, More/Less, settings, all four themes) works
+full gallery (search, filters, More/Less, help, settings, all four themes) works
 over `file://` with zero console errors. This works because the build:
 
 - inlines the JSON index into the HTML (no runtime fetching anywhere),

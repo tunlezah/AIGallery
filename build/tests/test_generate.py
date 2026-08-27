@@ -59,9 +59,18 @@ class GenerateTests(unittest.TestCase):
                 for key in ("image", "thumb"):
                     if item[key]:
                         self.assertTrue((out / item[key]).is_file(), item[key])
-            # placeholder shipped, broken image warned
+            # placeholder + configured default image shipped, broken image warned
             self.assertTrue((out / "assets/placeholder.svg").is_file())
+            self.assertTrue((out / "assets/AIGallery.png").is_file())
             self.assertIn("missing.png", proc.stderr)
+            html = (out / "index.html").read_text()
+            # imageless/broken-image tiles are baked with the default image
+            self.assertIn('src="assets/AIGallery.png"', html)
+            # help dialog baked with config-derived values
+            self.assertIn('id="help-dialog"', html)
+            self.assertIn("<code>AI-Gallery</code>", html)
+            self.assertIn("<code>.ai-gallery/index.md</code>", html)
+            self.assertNotIn("{{", html)  # no template slot left unreplaced
             # draft excluded
             self.assertNotIn("draft-item", (out / "gallery.json").read_text())
 
@@ -157,6 +166,9 @@ class GenerateTests(unittest.TestCase):
             dist = Path(tmp) / "dist-standalone"
             html = (dist / "index.html").read_text()
             self.assertTrue((dist / "media").is_dir())
+            # default image travels as a media/ file (not a repeated data URI)
+            self.assertTrue((dist / "media" / "gallery-default.png").is_file())
+            self.assertIn('src="media/gallery-default.png"', html)
             # no CSP meta, no external script/style refs in standalone
             self.assertNotIn("Content-Security-Policy", html)
             self.assertNotIn('src="./assets/', html)

@@ -482,42 +482,37 @@
     observer.observe(sentinel);
   })();
 
-  /* ---------- settings dialog ---------- */
-  var dialog = document.getElementById('settings-dialog');
-  var settingsButton = document.getElementById('settings-button');
-  var closeButton = document.getElementById('settings-close');
-  var dialogSupported = dialog && typeof dialog.showModal === 'function';
+  /* ---------- dialogs (settings + help share the wiring) ---------- */
+  function wireDialog(dialogId, triggerId, closeId) {
+    var dialog = document.getElementById(dialogId);
+    var trigger = document.getElementById(triggerId);
+    var closeButton = document.getElementById(closeId);
+    if (!dialog || !trigger) { return; }
+    var supported = typeof dialog.showModal === 'function';
 
-  function dialogIsOpen() {
-    return dialog && dialog.hasAttribute('open');
-  }
+    function isOpen() { return dialog.hasAttribute('open'); }
 
-  function openDialog() {
-    if (!dialog) { return; }
-    if (dialogSupported) { dialog.showModal(); }
-    else { dialog.setAttribute('open', 'open'); }
-    var first = dialog.querySelector('input:checked') || dialog.querySelector('button, input');
-    if (first) { try { first.focus({ preventScroll: true }); } catch (err) { first.focus(); } }
-  }
-
-  function closeDialog() {
-    if (!dialog) { return; }
-    if (dialogSupported) { dialog.close(); }
-    else {
-      dialog.removeAttribute('open');
-      returnFocus();
+    function returnFocus() {
+      try { trigger.focus({ preventScroll: true }); } catch (err) { trigger.focus(); }
     }
-  }
 
-  function returnFocus() {
-    if (settingsButton) {
-      try { settingsButton.focus({ preventScroll: true }); } catch (err) { settingsButton.focus(); }
+    function openDialog() {
+      if (supported) { dialog.showModal(); }
+      else { dialog.setAttribute('open', 'open'); }
+      var first = dialog.querySelector('input:checked') || dialog.querySelector('button, input');
+      if (first) { try { first.focus({ preventScroll: true }); } catch (err) { first.focus(); } }
     }
-  }
 
-  if (dialog && settingsButton) {
-    settingsButton.addEventListener('click', function () {
-      if (dialogIsOpen()) { closeDialog(); } else { openDialog(); }
+    function closeDialog() {
+      if (supported) { dialog.close(); }
+      else {
+        dialog.removeAttribute('open');
+        returnFocus();
+      }
+    }
+
+    trigger.addEventListener('click', function () {
+      if (isOpen()) { closeDialog(); } else { openDialog(); }
     });
     if (closeButton) { closeButton.addEventListener('click', closeDialog); }
     /* Backdrop click: the dialog element itself is only the click target
@@ -528,6 +523,9 @@
     /* Escape triggers 'cancel' then 'close' natively; focus returns here. */
     dialog.addEventListener('close', returnFocus);
   }
+
+  wireDialog('settings-dialog', 'settings-button', 'settings-close');
+  wireDialog('help-dialog', 'help-button', 'help-close');
 
   /* ---------- settings: theme / sort / density ---------- */
   function bindRadioGroup(name, current, onChange) {
