@@ -1,0 +1,4 @@
+PyYAML==6.0.1
+markdown-it-py==4.2.0
+nh3==0.3.7
+Pillow==12.3.0

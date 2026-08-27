@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "topic": "AI-Gallery",
+  "instance": "https://gitlab.example.com",
+  "fetched": false,
+  "truncated": false,
+  "projects": []
+}

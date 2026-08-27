@@ -1,0 +1,32 @@
+site_title       = "AI Gallery"
+site_description = "A curated gallery of AI tools and resources."
+
+content_repo_url = "https://gitlab.com/example-group/ai-gallery-content.git"
+content_repo_ref = "main"          # branch, tag, or commit SHA
+content_subdir   = "."             # path within the content repo to treat as root
+
+default_image    = "assets/placeholder.svg"
+default_sort     = "order"         # order | title | added | updated
+cards_per_page   = 0               # 0 = render all; >0 = paginate incrementally
+
+generate_thumbnails = true         # requires Pillow; degrades gracefully if absent
+thumbnail_width  = 640
+strict           = false           # true = treat warnings as errors (topic notices exempt)
+
+# --- Topic subscription (optional; never fatal) ---
+topics_enabled         = true
+topic_name             = "AI-Gallery"   # GitLab topic to subscribe to
+topic_api_base         = ""             # blank = derive (see README: resolution order)
+topic_section_slug     = "subscribed"
+topic_section_title    = "Subscribed"
+topic_section_order    = 900
+topic_section_description = "Projects on this GitLab instance tagged with the gallery topic."
+topic_max_projects     = 200            # cap; above this, notice + deterministic truncation
+topic_include_archived = false
+topic_visibility       = ""             # "" | public | internal | private (passed through)
+topic_fetch_avatars    = true
+topic_avatar_max_kb    = 512
+topic_manifest_path    = ".ai-gallery/index.md"  # optional per-project enrichment
+topic_exclude          = []             # list of path_with_namespace globs to skip
+topic_timeout_seconds  = 20             # per request
+topic_budget_seconds   = 120            # overall wall-clock budget for the fetch step

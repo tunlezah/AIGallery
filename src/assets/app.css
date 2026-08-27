@@ -1,0 +1,700 @@
+/* ==========================================================================
+   AI Gallery — single stylesheet, no external requests, standalone-safe.
+   Theme system: custom properties on :root (light), overridden for dark,
+   for [data-theme="system"] under prefers-color-scheme, and for geocities.
+   ========================================================================== */
+
+/* ---------- tokens: light (default) ---------- */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1e24;
+  --muted: #58606b;
+  --border: #d8dce2;
+  --accent: #0b57d0;
+  --link: #0b57d0;
+  --link-visited: #0b57d0;
+  --chip-bg: #e9edf2;
+  --chip-text: #333a44;
+  --chip-active-bg: #0b57d0;
+  --chip-active-text: #ffffff;
+  --badge-bg: #e3f0e7;
+  --badge-text: #1d5b34;
+  --focus: #0b57d0;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --radius: 10px;
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-text: #1b1e24;
+  --counter-bg: transparent;
+  --counter-text: #58606b;
+  --heading-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --body-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --tile-min: 13.25rem;
+  --tile-gap: 1rem;
+  --card-clamp-lines: 3;
+  --tile-border-width: 1px;
+  --tile-border-style: solid;
+}
+
+/* ---------- tokens: dark ---------- */
+[data-theme="dark"] {
+  --bg: #121418;
+  --surface: #1c1f26;
+  --text: #e8eaee;
+  --muted: #a5adb8;
+  --border: #343a44;
+  --accent: #8ab4f8;
+  --link: #8ab4f8;
+  --link-visited: #8ab4f8;
+  --chip-bg: #2a2f38;
+  --chip-text: #d3d9e0;
+  --chip-active-bg: #8ab4f8;
+  --chip-active-text: #121418;
+  --badge-bg: #24402e;
+  --badge-text: #9fd7ae;
+  --focus: #8ab4f8;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --header-bg: rgba(18, 20, 24, 0.92);
+  --header-text: #e8eaee;
+  --counter-text: #a5adb8;
+}
+[data-theme="dark"] { color-scheme: dark; }
+
+/* System resolves ONLY to light or dark — never to GeoCities. */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --bg: #121418;
+    --surface: #1c1f26;
+    --text: #e8eaee;
+    --muted: #a5adb8;
+    --border: #343a44;
+    --accent: #8ab4f8;
+    --link: #8ab4f8;
+    --link-visited: #8ab4f8;
+    --chip-bg: #2a2f38;
+    --chip-text: #d3d9e0;
+    --chip-active-bg: #8ab4f8;
+    --chip-active-text: #121418;
+    --badge-bg: #24402e;
+    --badge-text: #9fd7ae;
+    --focus: #8ab4f8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.35);
+    --header-bg: rgba(18, 20, 24, 0.92);
+    --header-text: #e8eaee;
+    --counter-text: #a5adb8;
+    color-scheme: dark;
+  }
+}
+
+/* ---------- tokens: GeoCities (explicit choice only) ---------- */
+[data-theme="geocities"] {
+  --bg: #000033;
+  --surface: #ffffcc;
+  --text: #000000;
+  --muted: #404000;
+  --border: #808080;
+  --accent: #ff00ff;
+  --link: #0000ee;
+  --link-visited: #551a8b;
+  --chip-bg: #c0c0c0;
+  --chip-text: #000000;
+  --chip-active-bg: #000080;
+  --chip-active-text: #ffff00;
+  --badge-bg: #ff00ff;
+  --badge-text: #000000;
+  --focus: #ff0000;
+  --shadow: 4px 4px 0 rgba(0, 0, 0, 0.6);
+  --radius: 0px;
+  --header-bg: #000080;
+  --header-text: #ffff00;
+  --counter-bg: #000000;
+  --counter-text: #00ff00;
+  --heading-font: "Comic Sans MS", "Comic Sans", cursive;
+  --body-font: "Times New Roman", Times, serif;
+  --tile-border-width: 4px;
+  --tile-border-style: ridge;
+  color-scheme: light;
+}
+
+/* Density presets (settings panel) */
+[data-density="comfortable"] { --tile-min: 15rem; }
+[data-density="compact"]     { --tile-min: 11.5rem; }
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body-font);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+[data-theme="geocities"] body {
+  /* Tiled starfield built from pure CSS gradients — zero extra requests. */
+  background-color: #000033;
+  background-image:
+    radial-gradient(1px 1px at 12px 18px, #ffffff 100%, transparent 100%),
+    radial-gradient(1px 1px at 76px 44px, #ffffcc 100%, transparent 100%),
+    radial-gradient(2px 2px at 40px 90px, #ffffff 100%, transparent 100%),
+    radial-gradient(1px 1px at 110px 22px, #99ccff 100%, transparent 100%),
+    radial-gradient(1px 1px at 132px 74px, #ffffff 100%, transparent 100%),
+    radial-gradient(2px 2px at 96px 118px, #ffff99 100%, transparent 100%),
+    radial-gradient(1px 1px at 22px 132px, #ffffff 100%, transparent 100%),
+    radial-gradient(1px 1px at 58px 60px, #ffffff 100%, transparent 100%);
+  background-size: 140px 140px;
+}
+img { max-width: 100%; }
+a { color: var(--link); }
+a:visited { color: var(--link-visited); }
+a:active { color: #ff0000; }
+button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+[data-theme="geocities"] :focus-visible {
+  outline: 4px dotted var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.skip-link {
+  position: absolute;
+  left: 0.5rem; top: -3rem;
+  z-index: 60;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--focus);
+  border-radius: var(--radius);
+  transition: top 120ms ease;
+}
+.skip-link:focus { top: 0.5rem; }
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--header-bg);
+  color: var(--header-text);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+}
+.site-title {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-size: 1.15rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.search-wrap { flex: 1; display: flex; justify-content: flex-end; }
+#search {
+  width: 100%;
+  max-width: 22rem;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 2);
+}
+#search::placeholder { color: var(--muted); opacity: 1; }
+.settings-button, .rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem; height: 2.4rem;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.settings-button:hover, .rail-toggle:hover { border-color: var(--border); }
+.rail-toggle { display: none; }
+
+/* GeoCities marquee-style welcome banner (CSS animation, no marquee tag) */
+.welcome-banner { display: none; }
+[data-theme="geocities"] .welcome-banner {
+  display: block;
+  overflow: hidden;
+  background: #000080;
+  color: #00ffff;
+  border-top: 2px ridge #c0c0c0;
+  border-bottom: 2px ridge #c0c0c0;
+  font-family: var(--heading-font);
+  padding: 0.25rem 0;
+  white-space: nowrap;
+}
+[data-theme="geocities"] .welcome-scroll {
+  display: inline-block;
+  padding-left: 100%;
+  animation: gallery-marquee 22s linear infinite;
+}
+@keyframes gallery-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+/* ==========================================================================
+   Layout: rail + main
+   ========================================================================== */
+.layout {
+  display: flex;
+  gap: 1.5rem;
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 1rem;
+  align-items: flex-start;
+}
+.rail {
+  flex: 0 0 15rem;
+  position: sticky;
+  top: 4rem;
+  max-height: calc(100vh - 5rem);
+  overflow: auto;
+}
+.main { flex: 1; min-width: 0; }
+
+.rail-block { margin-bottom: 1.25rem; }
+.rail-heading {
+  margin: 0 0 0.5rem;
+  font-family: var(--heading-font);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+[data-theme="geocities"] .rail-heading { color: #ffff00; }
+.rail-list { list-style: none; margin: 0; padding: 0; }
+.rail-list li { margin: 0 0 0.25rem; }
+.rail-section {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+[data-theme="geocities"] .rail-section { color: #ffffff; }
+.rail-section:hover { border-color: var(--border); }
+.rail-section[aria-pressed="true"] {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+}
+.rail-section .count { color: inherit; opacity: 0.75; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--muted); }
+.chip[aria-pressed="true"] {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+  border-color: var(--chip-active-bg);
+}
+.chip .count { opacity: 0.75; }
+.chip-more { cursor: default; }
+[data-theme="geocities"] .chip {
+  border: 2px outset #e0e0e0;
+  border-radius: 0;
+  font-family: var(--heading-font);
+}
+[data-theme="geocities"] .chip:active { border-style: inset; }
+
+.clear-filters, .reset-filters {
+  padding: 0.4rem 0.8rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.clear-filters:hover, .reset-filters:hover { border-color: var(--muted); }
+
+/* ==========================================================================
+   Result count / hit counter, notes, empty state
+   ========================================================================== */
+.result-count {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--counter-text);
+}
+[data-theme="geocities"] .result-count {
+  display: inline-block;
+  background: var(--counter-bg);
+  border: 3px inset #808080;
+  padding: 0.25rem 0.6rem;
+  font-family: var(--mono-font);
+}
+[data-theme="geocities"] .count-num {
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 4px #00ff00;
+}
+.noscript-note, .empty-state {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.empty-state p { margin: 0 0 0.75rem; }
+
+/* ==========================================================================
+   Sections
+   ========================================================================== */
+.gallery-section { margin: 0 0 2rem; }
+.section-head h2 {
+  margin: 0.5rem 0 0.25rem;
+  font-family: var(--heading-font);
+  font-size: 1.3rem;
+}
+[data-theme="geocities"] .section-head h2 { color: #ffff00; }
+.section-count { font-weight: 400; color: var(--muted); font-size: 0.95rem; }
+[data-theme="geocities"] .section-count { color: #ffffcc; }
+.section-desc { margin: 0 0 1rem; color: var(--muted); max-width: 60ch; }
+[data-theme="geocities"] .section-desc { color: #ffffff; }
+
+.rainbow-divider { display: none; }
+[data-theme="geocities"] .rainbow-divider {
+  display: block;
+  height: 8px;
+  margin: 1.5rem 0;
+  border: 2px ridge #c0c0c0;
+  background: linear-gradient(90deg, #ff0000, #ff9900, #ffff00, #00cc00, #0066ff, #9900cc);
+}
+
+/* ==========================================================================
+   The tile grid
+   ========================================================================== */
+.grid {
+  display: grid;
+  /* --tile-floor raises the minimum on narrow viewports (rail collapsed)
+     so 768px yields 2 columns whatever the density setting. */
+  grid-template-columns: repeat(auto-fill,
+    minmax(max(var(--tile-min, 13.25rem), var(--tile-floor, 0rem)), 1fr));
+  gap: var(--tile-gap, 1rem);
+  align-items: stretch;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: var(--tile-border-width) var(--tile-border-style) var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: border-color 120ms ease;
+}
+.tile:hover, .tile:focus-within { border-color: var(--accent); }
+[data-theme="geocities"] .tile {
+  border: 4px ridge #ff00ff;
+}
+.tile-media {
+  aspect-ratio: 4 / 3;
+  background: var(--chip-bg);
+  overflow: hidden;
+}
+.tile-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tile-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem 0.8rem;
+}
+.tile-title {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-size: 1.02rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-height: 2.7em;
+}
+.tile-title a { color: var(--link); text-decoration: none; }
+.tile-title a:visited { color: var(--link-visited); }
+.tile-title a:hover { text-decoration: underline; }
+.tile-title mark {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.tile-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.tile-chip { font-size: 0.72rem; padding: 0.1rem 0.5rem; }
+
+/* Body: served fully expanded; the clamp is applied by script. */
+.tile-body {
+  flex: 1;
+  font-size: 0.88rem;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+.tile-body > :first-child { margin-top: 0; }
+.tile-body > :last-child { margin-bottom: 0; }
+.tile-body p { margin: 0 0 0.6em; }
+.tile-body h3, .tile-body h4, .tile-body h5 {
+  margin: 0.7em 0 0.3em;
+  font-size: 0.95rem;
+  font-family: var(--heading-font);
+}
+.tile-body code, .tile-body kbd {
+  font-family: var(--mono-font);
+  font-size: 0.85em;
+  background: var(--chip-bg);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+.tile-body pre {
+  overflow-x: auto;
+  background: var(--chip-bg);
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+.tile-body pre code { background: transparent; padding: 0; }
+.tile-body blockquote {
+  margin: 0 0 0.6em;
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.tile-body table { border-collapse: collapse; font-size: 0.85em; }
+.tile-body th, .tile-body td { border: 1px solid var(--border); padding: 0.2em 0.5em; }
+.tile-body ul, .tile-body ol { margin: 0 0 0.6em; padding-left: 1.2rem; }
+.tile-body hr { border: 0; border-top: 1px solid var(--border); }
+
+.tile-body.clamped {
+  position: relative;
+  display: -webkit-box;
+  -webkit-line-clamp: var(--card-clamp-lines, 3);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-height: calc(var(--card-clamp-lines, 3) * 1.5em + 0.3em);
+}
+.tile-body.clamped.has-overflow::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1.3em;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+  pointer-events: none;
+}
+
+.more-button {
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--link);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.more-button:hover { border-color: var(--link); }
+[data-theme="geocities"] .more-button {
+  background: #c0c0c0;
+  color: #000000;
+  border: 3px outset #e0e0e0;
+  border-radius: 0;
+  font-family: var(--heading-font);
+}
+[data-theme="geocities"] .more-button:active { border-style: inset; }
+
+.tile-footer {
+  margin-top: auto;
+  padding-top: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.tile-host {
+  color: var(--link);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.tile-host:hover { text-decoration: underline; }
+.tile-updated { color: var(--muted); }
+[data-theme="geocities"] .tile-updated { color: var(--muted); }
+.tile-badge {
+  padding: 0.05rem 0.45rem;
+  font-size: 0.72rem;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  border-radius: 999px;
+}
+[data-theme="geocities"] .tile-badge {
+  border: 2px outset #ff66ff;
+  border-radius: 0;
+  font-family: var(--heading-font);
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.site-footer {
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+[data-theme="geocities"] .site-footer { color: #ffffff; }
+.construction-badge { display: none; }
+[data-theme="geocities"] .construction-badge { display: block; margin-top: 0.75rem; }
+
+/* ==========================================================================
+   Settings dialog
+   ========================================================================== */
+.settings-dialog {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  max-width: 22rem;
+  width: calc(100vw - 2rem);
+  box-shadow: var(--shadow);
+}
+[data-theme="geocities"] .settings-dialog { border: 4px ridge #ff00ff; }
+.settings-dialog::backdrop { background: rgba(10, 12, 16, 0.55); }
+.dialog-inner { padding: 1rem 1.25rem 1.25rem; }
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.dialog-head h2 { margin: 0; font-family: var(--heading-font); font-size: 1.1rem; }
+.dialog-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem; height: 2rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.dialog-close:hover { border-color: var(--muted); }
+.settings-group {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.settings-group legend {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
+.settings-option { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; cursor: pointer; }
+.settings-option input { accent-color: var(--accent); }
+
+/* ==========================================================================
+   Responsive: rail becomes a drawer
+   ========================================================================== */
+@media (max-width: 900px) {
+  :root { --tile-floor: 15rem; }
+  .rail-toggle { display: inline-flex; }
+  .layout { display: block; }
+  .rail {
+    display: none;
+    position: static;
+    max-height: none;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .rail.open { display: block; }
+  [data-theme="geocities"] .rail.open { border: 4px ridge #ff00ff; }
+}
+@media (max-width: 560px) {
+  .header-inner { flex-wrap: wrap; }
+  .search-wrap { order: 3; flex-basis: 100%; }
+  #search { max-width: none; }
+}
+
+/* ==========================================================================
+   Reduced motion: marquee becomes static, transitions off
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  [data-theme="geocities"] .welcome-scroll {
+    animation: none;
+    padding-left: 0;
+    white-space: normal;
+  }
+  [data-theme="geocities"] .welcome-banner {
+    text-align: center;
+    white-space: normal;
+  }
+}

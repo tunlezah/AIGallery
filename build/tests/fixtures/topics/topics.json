@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "topic": "AI-Gallery",
+  "instance": "https://gitlab.example.com",
+  "fetched": true,
+  "truncated": false,
+  "projects": [
+    {
+      "id": 42,
+      "path_with_namespace": "ml-group/prompt-forge",
+      "name": "Prompt Forge",
+      "name_with_namespace": "ML Group / Prompt Forge",
+      "description": "A workbench for iterating on prompts.\nSecond line collapses.",
+      "web_url": "https://gitlab.example.com/ml-group/prompt-forge",
+      "topics": ["AI-Gallery", "prompts", "Dev Tools"],
+      "created_at": "2026-02-01T09:30:00.000Z",
+      "last_activity_at": "2026-08-12T18:00:00.000Z",
+      "avatar_file": "media/42/avatar.png",
+      "manifest": null
+    },
+    {
+      "id": 57,
+      "path_with_namespace": "ml-group/eval-harness",
+      "name": "Eval Harness",
+      "name_with_namespace": "ML Group / Eval Harness",
+      "description": null,
+      "web_url": "https://gitlab.example.com/ml-group/eval-harness",
+      "topics": ["ai-gallery"],
+      "created_at": "2026-01-10T00:00:00.000Z",
+      "last_activity_at": "2026-07-01T12:00:00.000Z",
+      "avatar_file": "media/57/avatar.png",
+      "manifest": "---\ntitle: \"Eval Harness Pro\"\ntags: [\"evals\", \"benchmarks\"]\nsummary: \"Manifest-enriched summary wins over the project description.\"\nurl: \"https://gitlab.example.com/ml-group/eval-harness/-/wikis/home\"\n---\nManifest **body** becomes the card body. <script>alert('nope')</script>\n"
+    },
+    {
+      "id": 63,
+      "path_with_namespace": "infra/quiet-runner",
+      "name": "Quiet Runner",
+      "name_with_namespace": "Infra / Quiet Runner",
+      "description": "No avatar on this one.",
+      "web_url": "https://gitlab.example.com/infra/quiet-runner",
+      "topics": ["ai-gallery", "ci"],
+      "created_at": "2026-04-04T00:00:00.000Z",
+      "last_activity_at": "2026-06-20T00:00:00.000Z",
+      "avatar_file": null,
+      "manifest": null
+    },
+    {
+      "id": 71,
+      "path_with_namespace": "mirrors/ollama-mirror",
+      "name": "Ollama Mirror",
+      "name_with_namespace": "Mirrors / Ollama Mirror",
+      "description": "Duplicates a curated item's url and must be dropped.",
+      "web_url": "https://ollama.com/",
+      "topics": ["ai-gallery"],
+      "created_at": "2026-05-05T00:00:00.000Z",
+      "last_activity_at": "2026-05-06T00:00:00.000Z",
+      "avatar_file": null,
+      "manifest": null
+    },
+    {
+      "id": 88,
+      "path_with_namespace": "attic/old-experiments",
+      "name": "Old Experiments",
+      "name_with_namespace": "Attic / Old Experiments",
+      "description": "Archived project that slipped into the snapshot.",
+      "web_url": "https://gitlab.example.com/attic/old-experiments",
+      "topics": ["ai-gallery"],
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "last_activity_at": "2024-02-01T00:00:00.000Z",
+      "avatar_file": null,
+      "archived": true,
+      "manifest": null
+    },
+    {
+      "id": "not-an-int",
+      "name": "Malformed Record",
+      "web_url": 12345,
+      "topics": "nope"
+    }
+  ]
+}
