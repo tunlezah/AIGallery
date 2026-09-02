@@ -7,18 +7,27 @@ items" with a notice, and notices never fail the build (even under strict).
 
 All topic-derived strings are untrusted third-party input; everything that
 ends up in HTML goes through the same allow-list sanitiser as curated
-content.
+content, and only raster images are accepted from the snapshot.
 """
 
 from __future__ import annotations
 
 import datetime
 import json
-import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from content import Diagnostics, Item, Section, normalise_tags, slugify, collapse_ws, split_frontmatter
+from content import (
+    CONTROL_CHARS_RE,
+    Diagnostics,
+    Item,
+    Section,
+    collapse_ws,
+    normalise_tags,
+    parse_date,
+    slugify,
+    split_frontmatter,
+)
 from render import escape_html, render_markdown
 
 
@@ -57,43 +66,90 @@ def load_snapshot(snapshot_path: Path, diags: Diagnostics) -> dict | None:
     return data
 
 
+def _snapshot_media(label: str, value, snapshot_dir: Path, diags: Diagnostics,
+                    what: str) -> Path | None:
+    """Resolve a media path recorded in the snapshot, or None with a notice.
+
+    The snapshot is an interface, not a trusted artifact: paths must stay
+    inside the snapshot directory, the file must exist, and SVG is refused
+    because a third party's SVG would be served from the site's origin.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    rel = value.replace("\\", "/")
+    if ".." in rel.split("/") or rel.startswith("/"):
+        diags.notice(f"topic: {label} {what} path {rel!r} is unsafe; ignored")
+        return None
+    if rel.lower().endswith(".svg"):
+        diags.notice(f"topic: {label} {what} is an SVG, which is not accepted from third-party projects; ignored")
+        return None
+    candidate = snapshot_dir / rel
+    if not candidate.is_file():
+        diags.notice(f"topic: {label} {what} file {rel!r} missing from snapshot; using the default image")
+        return None
+    return candidate
+
+
 def _apply_manifest(record_name: str, manifest_text: str, instance_host: str,
                     diags: Diagnostics) -> dict:
     """Parse a project's optional .ai-gallery manifest.
 
-    Returns overrides: subset of {title, tags, summary, url, body_html}.
-    Same frontmatter + Markdown + sanitiser pipeline as index.md; failures
-    are notices only.
+    Returns overrides: a subset of {title, tags, summary, url, order, added,
+    updated, featured, draft, body_html}. Same frontmatter + Markdown +
+    sanitiser pipeline as index.md; failures are notices only. (The
+    manifest's `image` is fetched by fetch_topic.py and arrives as the
+    record's image_file.)
     """
     overrides: dict = {}
     scratch = Diagnostics()
-    front, body = split_frontmatter(manifest_text, f"manifest of {record_name}", scratch)
-    for msg in scratch.errors + scratch.warnings:
-        diags.notice(f"topic: {msg}")
+    where = f"manifest of {record_name}"
+    front, body = split_frontmatter(manifest_text, where, scratch)
     if front is None:
         front = {}
     title = front.get("title")
     if isinstance(title, str) and title.strip():
         overrides["title"] = collapse_ws(title)
     if "tags" in front:
-        overrides["tags"] = normalise_tags(front.get("tags"), scratch, f"manifest of {record_name}")
+        overrides["tags"] = normalise_tags(front.get("tags"), scratch, where)
     summary = front.get("summary")
     if isinstance(summary, str) and summary.strip():
         overrides["summary"] = collapse_ws(summary)[:200]
     url = front.get("url")
     if isinstance(url, str) and url.strip():
+        candidate = url.strip()
         try:
-            host = (urlsplit(url.strip()).hostname or "").lower()
+            host = (urlsplit(candidate).hostname or "").lower()
         except ValueError:
             host = ""
-        if host and host == instance_host and url.strip().lower().startswith(("http://", "https://")):
-            overrides["url"] = url.strip()
+        if (
+            host and host == instance_host
+            and candidate.lower().startswith(("http://", "https://"))
+            and not CONTROL_CHARS_RE.search(candidate)
+        ):
+            overrides["url"] = candidate
         else:
-            diags.notice(
-                f"topic: manifest of {record_name} sets url off the resolved instance host; ignored"
-            )
+            diags.notice(f"topic: {where} sets url off the resolved instance host; ignored")
+    order = front.get("order")
+    if isinstance(order, int) and not isinstance(order, bool):
+        overrides["order"] = order
+    elif order is not None:
+        scratch.warn(f"{where}: order must be an integer; ignored")
+    for fieldname in ("added", "updated"):
+        if fieldname in front:
+            parsed = parse_date(front.get(fieldname), scratch, where, fieldname)
+            if parsed:
+                overrides[fieldname] = parsed
+    featured = front.get("featured")
+    if isinstance(featured, bool):
+        overrides["featured"] = featured
+    elif featured is not None:
+        scratch.warn(f"{where}: featured must be a boolean; ignored")
+    if front.get("draft") is True:
+        overrides["draft"] = True
     if body.strip():
         overrides["body_html"] = render_markdown(body)
+    for msg in scratch.errors + scratch.warnings:
+        diags.notice(f"topic: {msg}")
     return overrides
 
 
@@ -115,6 +171,8 @@ def merge_topics(
         "fetched": False,
         "count": 0,
         "dropped_duplicates": 0,
+        "partial": False,
+        "truncated": False,
     }
     if not cfg.topics_enabled:
         return None, meta
@@ -127,12 +185,19 @@ def merge_topics(
     instance = snapshot.get("instance") if isinstance(snapshot.get("instance"), str) else None
     meta["instance"] = instance
     meta["fetched"] = bool(snapshot.get("fetched"))
+    meta["partial"] = bool(snapshot.get("partial"))
+    meta["truncated"] = bool(snapshot.get("truncated"))
     instance_host = (urlsplit(instance).hostname or "").lower() if instance else ""
 
     records = snapshot["projects"]
     if not snapshot.get("fetched") or not records:
         diags.notice("topic: snapshot has no projects; building with curated content only")
         return None, meta
+    if meta["partial"]:
+        diags.notice("topic: snapshot is marked partial (some avatar/manifest/image requests failed); "
+                     "affected projects fall back to the default image or derived metadata")
+    if meta["truncated"]:
+        diags.notice("topic: snapshot is marked truncated (project list cut off at the configured maximum)")
 
     # Deterministic ordering + defensive cap.
     def _sort_key(rec):
@@ -146,6 +211,7 @@ def merge_topics(
             f"topic_max_projects={cfg.topic_max_projects} (deterministic truncation)"
         )
         records = records[: cfg.topic_max_projects]
+        meta["truncated"] = True
 
     curated_urls = {
         normalise_url_for_dedupe(item.url) for item in curated_items if item.url
@@ -167,6 +233,7 @@ def merge_topics(
             or not isinstance(name, str) or not name.strip()
             or not isinstance(web_url, str)
             or not web_url.lower().startswith(("http://", "https://"))
+            or CONTROL_CHARS_RE.search(web_url)
         ):
             label = pwn if isinstance(pwn, str) and pwn else record.get("id", "<unknown>")
             diags.notice(f"topic: malformed project record {label!r} skipped")
@@ -197,18 +264,11 @@ def merge_topics(
         if isinstance(description, str):
             summary = collapse_ws(description)[:200]
 
-        avatar_src = None
-        avatar_file = record.get("avatar_file")
-        if isinstance(avatar_file, str) and avatar_file:
-            rel = avatar_file.replace("\\", "/")
-            if ".." in rel.split("/") or rel.startswith("/"):
-                diags.notice(f"topic: {pwn} avatar path {rel!r} is unsafe; ignored")
-            else:
-                candidate = snapshot_dir / rel
-                if candidate.is_file():
-                    avatar_src = candidate
-                else:
-                    diags.notice(f"topic: {pwn} avatar file {rel!r} missing from snapshot; using placeholder")
+        # A manifest image beats the project avatar; both must be raster
+        # files that actually exist inside the snapshot directory.
+        image_src = _snapshot_media(pwn, record.get("image_file"), snapshot_dir, diags, "manifest image")
+        if image_src is None:
+            image_src = _snapshot_media(pwn, record.get("avatar_file"), snapshot_dir, diags, "avatar")
 
         item = Item(
             slug=slug,
@@ -217,7 +277,7 @@ def merge_topics(
             title=collapse_ws(name),
             path=pwn,
             url=web_url,
-            image_src=avatar_src,
+            image_src=image_src,
             tags=tags,
             summary=summary,
             body_md="",
@@ -230,6 +290,9 @@ def merge_topics(
         manifest = record.get("manifest")
         if isinstance(manifest, str) and manifest.strip():
             overrides = _apply_manifest(pwn, manifest, instance_host, diags)
+            if overrides.pop("draft", False):
+                diags.notice(f"topic: {pwn} manifest sets draft: true; skipped")
+                continue
             for key_, value in overrides.items():
                 setattr(item, key_, value)
 

@@ -1,0 +1,9 @@
+# Exact versions of the generator's direct and transitive dependencies.
+# build/requirements.txt is GENERATED from this file with sha256 hashes:
+#     python build/pin_requirements.py      (needs access to pypi.org)
+# Bump a version here, regenerate, and commit both files.
+PyYAML==6.0.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+nh3==0.3.7
+Pillow==12.3.0

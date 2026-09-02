@@ -35,7 +35,9 @@
   })();
 
   /* ---------- data ---------- */
-  var data = { items: [], sections: [], tags: [], runtime: {} };
+  /* The inline block is a lean index for search/filter/sort only; tiles,
+     bodies, images and links are already in the served HTML. */
+  var data = { items: [], runtime: {} };
   var dataEl = document.getElementById('gallery-data');
   if (dataEl) {
     try { data = JSON.parse(dataEl.textContent); } catch (err) { }
@@ -110,10 +112,11 @@
   /* ---------- filtering ---------- */
   function parseQuery(q) {
     var tokens = fold(q).split(' ');
-    var parsed = { text: [], tags: [], sections: [], sources: [] };
+    var parsed = { text: [], tags: [], sections: [], sources: [], featured: false };
     tokens.forEach(function (token) {
       if (!token) { return; }
-      if (token.indexOf('tag:') === 0 && token.length > 4) { parsed.tags.push(token.slice(4)); }
+      if (token === 'is:featured') { parsed.featured = true; }
+      else if (token.indexOf('tag:') === 0 && token.length > 4) { parsed.tags.push(token.slice(4)); }
       else if (token.indexOf('section:') === 0 && token.length > 8) { parsed.sections.push(token.slice(8)); }
       else if (token.indexOf('source:') === 0 && token.length > 7) { parsed.sources.push(token.slice(7)); }
       else { parsed.text.push(token); }
@@ -141,6 +144,7 @@
     for (i = 0; i < parsed.sources.length; i++) {
       if (item.source !== parsed.sources[i]) { return false; }
     }
+    if (parsed.featured && !item.featured) { return false; }
     return true;
   }
 

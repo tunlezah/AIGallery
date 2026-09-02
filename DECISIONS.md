@@ -44,21 +44,115 @@ Measured values (columns, contrast) are at the end.
   lost) and wider than `thumbnail_width`; otherwise `thumb` = the original.
   WebP quality 80 / method 4, deterministic for a fixed Pillow version
   (pinned in requirements.txt).
-- **Sort semantics:** `order` = (order, folded title); `title` = folded
+- **Sort semantics:** `order` = (order, folded title, slug); `title` = folded
   title; `added`/`updated` = newest first with undated items last — date
-  sorts are only useful newest-first in a gallery.
+  sorts are only useful newest-first in a gallery. Within one date the
+  tie-break is title A→Z (the date key is negated rather than the whole sort
+  reversed), so the baked order and the `app.js` comparator agree and
+  switching sort modes in the settings never reshuffles same-date items.
 - **`generated_from.commit` is only reported when the content dir is itself
   a clone root** (`.git` present) — otherwise `git` would resolve upward to
   an unrelated enclosing repo and break cross-commit determinism.
 - **The inline JSON block escapes every `<` as `<`**, which covers both
-  `</script` and `<!--` in one rule and keeps the payload valid JSON.
+  `</script` and `<!--` in one rule and keeps the payload valid JSON. It
+  carries **only what `app.js` reads** (id, section, source, title, tags,
+  search text, order, dates, featured): bodies, summaries, image paths and
+  links are already baked into the tiles, and `gallery.json` keeps the full
+  record. On large galleries this is the difference between shipping one
+  copy of every body and two.
 - **Item with no image:** `image`/`thumb` are `null` in the index; the baked
-  HTML references the configured `default_image` directly (hosted:
-  `assets/AIGallery.png`; standalone: a `media/gallery-default.*` copy —
-  a data URI would be repeated per imageless tile, and `media/` is already
-  the only sibling the standalone file needs). A `default_image` that is
-  missing or escapes `src/` warns and falls back to `assets/placeholder.svg`,
-  which also stays as the JS-side last resort for images that 404 at runtime.
+  HTML references the default image, which the build derives into
+  `media/gallery-default.<thumbnail_width>.webp` through the same resize
+  path as item covers (a raster narrower than the thumbnail width, or an
+  SVG, is copied as `media/gallery-default.<ext>`). The full-size source is
+  excluded from the `src/` mirror: every imageless tile loads this file, so
+  its weight matters more than any other asset's (1.5 MB → ~15 KB for the
+  shipped PNG). One file under `media/` also keeps the standalone target's
+  single sibling folder. A `default_image` that is missing or escapes `src/`
+  warns and falls back to `assets/placeholder.svg`, which also stays as the
+  JS-side last resort; an unsafe SVG default is an error. With
+  `--single-file` the default image is inlined like any other small image,
+  and `runtime.placeholder` becomes a data URI too, so the one file really
+  is one file.
+- **URL validation refuses control characters and detects the scheme with
+  `urlsplit`.** The WHATWG URL parser strips tab/newline anywhere and leading
+  C0 controls before it looks at the scheme, so a regex over the raw string
+  saw `java\tscript:` as relative while the browser saw `javascript:`.
+  Control characters have no place in a gallery link, so they are a hard
+  error; `\\host` is refused like `//host` because browsers treat the
+  backslash as a slash in that position. The hosted CSP and the
+  `noopener` targets already blocked execution, but the documented
+  guarantee has to hold on its own.
+- **SVGs are validated, not sanitised.** A served SVG is inert inside `<img>`
+  but runs scripts on the site's origin when opened directly, and `url()`
+  or `href` references make network requests. Curated content is reviewed,
+  so an SVG with a script, event handler, `<foreignObject>`, DOCTYPE/ENTITY
+  declaration, `url()`/`@import` in styles or an external reference fails
+  the build with the file named (a validator cannot silently emit something
+  the author did not write). Third-party sources never get SVG at all: the
+  fetch step recognises only raster magic bytes, and the merge refuses a
+  `.svg` path in the snapshot defensively.
+- **The topic token is scoped to the origin it was addressed to.** urllib's
+  redirect handler copies every header onto the redirected request, so an
+  avatar URL that GitLab redirects to object storage would have carried
+  `PRIVATE-TOKEN` to that host. A custom handler follows the redirect
+  without the token when the origin (scheme, host, port) changes and refuses
+  non-web schemes; same-origin redirects keep it.
+- **Downloaded images are trusted by bytes, not by header.** GitLab's raw
+  file endpoint often labels files `text/plain`, so the content-type cannot
+  be the gate; magic bytes decide (PNG/JPEG/WebP/GIF only), and a declared
+  `image/*` type that disagrees with the bytes is refused as suspicious.
+- **Manifest `image` is fetched in the network step**, never resolved at
+  merge time: it must be a raster file in the manifest's own directory (or
+  below), capped by `topic_avatar_max_kb`, and it beats the avatar. The
+  other manifest fields (`order`, `added`, `updated`, `featured`, `draft`)
+  are applied at merge time with the same coercion rules as `index.md`;
+  `draft: true` removes the project, which is the manifest owner's way out
+  short of untagging.
+- **`topic_allow_namespaces` is an allow-list on `path_with_namespace`
+  globs** (case-insensitive; GitLab paths are case-insensitive in practice)
+  applied client-side in the fetch step, before the project cap, so excluded
+  projects never consume budget or slots. Skips are summarised in one notice
+  rather than one per project, and an empty list prints a reminder that the
+  whole instance is being listed. The group-projects endpoint would scope
+  the query server-side but relies on a `topic` parameter that cannot be
+  verified against a disconnected instance from here.
+- **The footer states the topic feed's build-time state.** The fetch step's
+  "never fail" contract means a feed broken for weeks is indistinguishable
+  from a feed with no projects unless something says so; the footer line
+  (count, truncated, partial, or unavailable) is baked from the snapshot
+  metadata and styled as a warning when degraded.
+- **Snapshots record `partial`** (some avatar/manifest/image request failed,
+  404s excluded) alongside `truncated` (project list cut off), and the merge
+  surfaces both as notices and in `generated_from.topic`. Without it two
+  builds of the same content could differ with network speed and nobody
+  would know why.
+- **`fetch_topic.py` resolves paths against the repository root** like
+  `generate.py` (`--config`, `--out` override), so the fetch step run from
+  another directory no longer silently writes a snapshot the generator never
+  reads.
+- **The help dialog's repo link strips userinfo** before baking; the smoke
+  check only knows the token values it is told about, so a token pasted into
+  `GALLERY_CONTENT_REPO_URL` would otherwise have been published verbatim.
+- **Tables and strikethrough are enabled in the Markdown parser.** The
+  sanitiser allow-list admitted `table`/`del` from the start while the
+  CommonMark preset never produced them, so a table in an item body came
+  out as a paragraph of pipes. Alignment styles are stripped with every
+  other `style` attribute (the CSP has no `unsafe-inline`).
+- **`featured` means a badge and a filter**, not a sort change: `order` is
+  the curator's explicit ordering and stays authoritative; `is:featured` in
+  the search box lists featured items, and the article carries
+  `data-featured` for styling.
+- **Section icons render in the heading and the sidebar** as decorative
+  images (`alt=""`, the title is adjacent), thumbnailed to at most 256 px
+  because an icon is never displayed larger than a line of text.
+- **Dependencies are pinned by hash.** `requirements.in` holds the exact
+  versions (transitive `mdurl` included); `pin_requirements.py` expands them
+  into `requirements.txt` with every published file's sha256, so pip's
+  hash-checking mode works on any platform while refusing tampered or
+  re-packaged files. The base image and apt packages stay tag-pinned; a
+  digest pin is documented as the operator's call because disconnected
+  registries do not always preserve digests.
 - **`cards_per_page > 0` is implemented as incremental reveal** (first N tiles
   shown, IntersectionObserver sentinel reveals the rest chunk-by-chunk) rather
   than discrete pages: real pagination would fight hash-based filter state,
@@ -114,6 +208,29 @@ Measured values (columns, contrast) are at the end.
 - **Non-modal `<dialog>` fallback** (no `showModal`): open attribute is set
   manually and close-button/trigger-toggle still work; Escape/backdrop are
   native-modal features. No current browser needs this path.
+- **`[hidden] { display: none !important }` is part of the base styles.**
+  The filter code hides tiles by setting the `hidden` attribute, but the
+  tile's own `display: flex` rule (author origin) beats the UA stylesheet's
+  `[hidden]` rule, so filtered-out tiles inside a visible section stayed on
+  screen while the result count said otherwise; only whole sections
+  disappeared. The browser smoke test now asserts that a tag filter leaves
+  exactly the matching tiles visible and that every `[hidden]` tile computes
+  to `display: none`.
+- **The explicit Light theme sets `color-scheme: light`.** The page-level
+  `<meta name="color-scheme" content="light dark">` lets a dark OS pick dark
+  form controls and scrollbars; Dark and GeoCities already pinned theirs, so
+  Light was the one theme whose radios and dialog chrome could come out
+  dark on a light surface. System deliberately sets nothing and follows
+  the OS.
+- **Search tokens are documented in the help dialog** (`tag:`, `section:`,
+  `source:`, `is:featured`, `/`, Escape) because a filter nobody can
+  discover is a filter nobody uses.
+- **The browser smoke test is a developer script, not a pipeline job.** It
+  needs Node and a Chromium download, which the disconnected runner cannot
+  make; `build/tests/browser_smoke.js` builds the fixtures and asserts the
+  front-end guarantees (no console errors, filters, sort, dialogs, images,
+  no `javascript:` links) on both targets, so the "verified in the browser
+  pass" claims are repeatable on any developer machine.
 
 ## Measured tile-grid values
 

@@ -82,6 +82,18 @@ class SanitiserTests(unittest.TestCase):
         self.assertIn("<table>", out)
         self.assertIn("<td>", out)
 
+    def test_markdown_table_renders(self):
+        out = render_markdown("| a | b |\n|---|:-:|\n| 1 | 2 |")
+        for tag in ("<table>", "<thead>", "<th>", "<tbody>", "<td>"):
+            self.assertIn(tag, out)
+        self.assertNotIn("style=", out)  # alignment styles are stripped (CSP-safe)
+
+    def test_strikethrough_renders_as_del(self):
+        # markdown-it emits <s>; the allow-list carries <del>, so it is mapped.
+        out = render_markdown("~~gone~~ text")
+        self.assertIn("<del>gone</del>", out)
+        self.assertNotIn("<s>", out)
+
 
 class TextTests(unittest.TestCase):
     def test_html_to_text(self):

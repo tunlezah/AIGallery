@@ -16,17 +16,18 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import load_config  # noqa: E402
 from content import Diagnostics, Item, Section, discover  # noqa: E402
-from images import HAVE_PILLOW, process_image  # noqa: E402
+from images import derive_default_image, process_image  # noqa: E402
 from render import (  # noqa: E402
     derive_summary,
     escape_html,
@@ -50,6 +51,18 @@ CSP_META = (
     "script-src 'self'; base-uri 'none'; form-action 'none'\">"
 )
 
+FALLBACK_DEFAULT_IMAGE = "assets/placeholder.svg"
+# --single-file inlines media files up to this size as data URIs.
+INLINE_THRESHOLD_KB = 200
+# Section icons are decorative and small; never ship them wider than this.
+ICON_MAX_WIDTH = 256
+# The inline JSON block carries only what app.js reads. Bodies, images and
+# links are already baked into the tiles; gallery.json keeps the full record.
+LEAN_ITEM_KEYS = (
+    "id", "section", "source", "title", "tags", "search",
+    "order", "added", "updated", "featured",
+)
+
 
 # --------------------------------------------------------------------------
 # Index assembly
@@ -68,19 +81,22 @@ def content_commit(content_dir: Path) -> str | None:
         return None
 
 
+def _date_desc_key(value: str | None) -> int:
+    """ISO dates sort numerically as YYYYMMDD; negated for newest-first while
+    the title tie-break stays ascending (mirrors the comparator in app.js)."""
+    digits = re.sub(r"\D", "", value or "")
+    return -int(digits) if digits else 0
+
+
 def sort_items(items: list[Item], mode: str) -> list[Item]:
     fold = fold_search_text
     if mode == "title":
         return sorted(items, key=lambda i: (fold(i.title), i.section, i.slug))
     if mode in ("added", "updated"):
-        def key(i: Item):
-            date = getattr(i, mode)
-            return (date is None, "" if date is None else "", date or "", fold(i.title))
-        # newest first, missing dates last
+        # newest first, then title A-Z; undated items last, by title
         with_date = sorted(
             (i for i in items if getattr(i, mode)),
-            key=lambda i: (getattr(i, mode), fold(i.title)),
-            reverse=True,
+            key=lambda i: (_date_desc_key(getattr(i, mode)), fold(i.title), i.slug),
         )
         without = sorted((i for i in items if not getattr(i, mode)),
                          key=lambda i: (fold(i.title), i.slug))
@@ -89,7 +105,7 @@ def sort_items(items: list[Item], mode: str) -> list[Item]:
 
 
 def build_index(cfg, sections: list[Section], topic_meta: dict,
-                ref: str | None, commit: str | None) -> dict:
+                ref: str | None, commit: str | None, default_image: str) -> dict:
     all_items: list[Item] = [item for section in sections for item in section.items]
     tag_counts: dict[str, int] = {}
     for item in all_items:
@@ -133,7 +149,11 @@ def build_index(cfg, sections: list[Section], topic_meta: dict,
 
     return {
         "schema": 1,
-        "site": {"title": cfg.site_title, "description": cfg.site_description},
+        "site": {
+            "title": cfg.site_title,
+            "description": cfg.site_description,
+            "default_image": default_image,
+        },
         "generated_from": {
             "ref": ref,
             "commit": commit,
@@ -158,8 +178,9 @@ def render_tile(item: Item, placeholder_url: str, topic_name: str) -> str:
         f' width="{item.image_w}" height="{item.image_h}"'
         if item.image_w and item.image_h else ' width="800" height="600"'
     )
+    featured_attr = ' data-featured="true"' if item.featured else ""
     parts = [
-        f'<article class="tile" data-id="{esc(item_id)}">',
+        f'<article class="tile" data-id="{esc(item_id)}"{featured_attr}>',
         '<div class="tile-media">',
         f'<img src="{esc(img_src)}"{dims} alt="" loading="lazy" decoding="async">',
         "</div>",
@@ -206,6 +227,8 @@ def render_tile(item: Item, placeholder_url: str, topic_name: str) -> str:
         footer_bits.append(
             f'<time class="tile-updated" datetime="{esc(item.updated)}">{esc(item.updated)}</time>'
         )
+    if item.featured:
+        footer_bits.append('<span class="tile-badge tile-badge-featured">Featured</span>')
     if item.source == "topic":
         footer_bits.append(
             f'<span class="tile-badge">from topic<span class="visually-hidden">'
@@ -214,6 +237,17 @@ def render_tile(item: Item, placeholder_url: str, topic_name: str) -> str:
     parts.append(f'<div class="tile-footer">{"".join(footer_bits)}</div>')
     parts.append("</div></article>")
     return "".join(parts)
+
+
+def _icon_html(section: Section, css_class: str) -> str:
+    """Decorative section icon (alt="": the section title is right beside it)."""
+    if not section.icon:
+        return ""
+    dims = (
+        f' width="{section.icon_w}" height="{section.icon_h}"'
+        if section.icon_w and section.icon_h else ""
+    )
+    return f'<img class="{css_class}" src="{escape_html(section.icon)}"{dims} alt="" decoding="async">'
 
 
 def render_content(cfg, sections: list[Section], placeholder_url: str) -> str:
@@ -229,7 +263,8 @@ def render_content(cfg, sections: list[Section], placeholder_url: str) -> str:
         )
         out.append('<div class="section-head">')
         out.append(
-            f'<h2 id="section-h-{escape_html(section.slug)}">{escape_html(section.title)}'
+            f'<h2 id="section-h-{escape_html(section.slug)}">{_icon_html(section, "section-icon")}'
+            f'{escape_html(section.title)}'
             f' <span class="section-count">({len(section.items)})</span></h2>'
         )
         if section.description:
@@ -250,7 +285,8 @@ def render_rail(sections: list[Section], tag_counts: dict[str, int]) -> str:
     for section in ordered:
         out.append(
             f'<li><button type="button" class="rail-section" data-section="{esc(section.slug)}" '
-            f'aria-pressed="false">{esc(section.title)} '
+            f'aria-pressed="false"><span class="rail-label">{_icon_html(section, "rail-icon")}'
+            f'{esc(section.title)}</span> '
             f'<span class="count">{len(section.items)}</span></button></li>'
         )
     out.append("</ul></div>")
@@ -266,14 +302,67 @@ def render_rail(sections: list[Section], tag_counts: dict[str, int]) -> str:
     return "\n".join(out)
 
 
-FALLBACK_DEFAULT_IMAGE = "assets/placeholder.svg"
+def topic_status_html(cfg, topic_meta: dict) -> str:
+    """Footer line that makes the topic feed's build-time state visible.
+
+    The fetch step can never fail the pipeline, so without this a feed that
+    has been broken for weeks would look exactly like a feed with no projects.
+    """
+    if not topic_meta.get("enabled"):
+        return ""
+    name = escape_html(cfg.topic_name)
+    if not topic_meta.get("fetched"):
+        return (
+            '<p class="topic-status topic-status-warn">The GitLab topic feed for '
+            f'<code>{name}</code> was unavailable when this build ran, so subscribed '
+            "projects may be missing.</p>"
+        )
+    count = int(topic_meta.get("count") or 0)
+    noun = "project" if count == 1 else "projects"
+    text = (
+        f"{count} subscribed {noun} discovered via the GitLab topic "
+        f"<code>{name}</code> at build time."
+    )
+    degraded = bool(topic_meta.get("partial") or topic_meta.get("truncated"))
+    if topic_meta.get("truncated"):
+        text += " The list was cut off at the configured maximum."
+    if topic_meta.get("partial"):
+        text += " Some project images or manifests could not be fetched."
+    css = "topic-status topic-status-warn" if degraded else "topic-status"
+    return f'<p class="{css}">{text}</p>'
+
+
+def public_repo_url(url: str) -> str:
+    """Repository URL for display: credentials stripped, trailing .git removed.
+
+    Someone may point GALLERY_CONTENT_REPO_URL at a token-bearing URL; the
+    help dialog must never publish it.
+    """
+    url = (url or "").strip().removesuffix(".git")
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return ""
+    if parts.username is None and parts.password is None:
+        return url
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if port:
+        host = f"{host}:{port}"
+    return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
 
 
 def resolve_default_image(cfg, diags: Diagnostics) -> str:
     """Validate cfg.default_image as a path inside src/; fall back if broken.
 
-    The returned value is a src/-relative POSIX path — usable directly as the
-    hosted URL because copy_src() mirrors src/ into the output directory.
+    The returned value is a src/-relative POSIX path. The build derives a
+    tile-sized copy of it under media/ (see derive_default_image), so the
+    full-size source is never shipped.
     """
     rel = (cfg.default_image or "").strip().replace("\\", "/")
     if not rel:
@@ -301,7 +390,7 @@ def inline_json(payload: dict) -> str:
     return text.replace("<", "\\u003c")
 
 
-def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
+def render_page(template: str, *, cfg, index: dict, sections, tag_counts, topic_meta: dict,
                 standalone: bool, single_file: bool, out_dir: Path,
                 placeholder_url: str) -> str:
     if standalone:
@@ -318,12 +407,24 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
         scripts = '<script src="./assets/app.js" defer></script>'
         csp = CSP_META
 
-    payload = dict(index)
-    payload["runtime"] = {
-        "placeholder": placeholder_url,
-        "cards_per_page": cfg.cards_per_page,
-        "default_sort": cfg.default_sort,
-        "topic_name": cfg.topic_name,
+    runtime_placeholder = placeholder_url
+    if standalone and single_file:
+        # A one-file build has no media/ sibling: make the runtime image
+        # fallback self-contained as well.
+        candidate = out_dir / placeholder_url
+        if candidate.is_file() and candidate.stat().st_size <= INLINE_THRESHOLD_KB * 1024:
+            runtime_placeholder = data_uri(candidate)
+
+    payload = {
+        "schema": index["schema"],
+        "generated_from": index["generated_from"],
+        "runtime": {
+            "placeholder": runtime_placeholder,
+            "cards_per_page": cfg.cards_per_page,
+            "default_sort": cfg.default_sort,
+            "topic_name": cfg.topic_name,
+        },
+        "items": [{key: item[key] for key in LEAN_ITEM_KEYS} for item in index["items"]],
     }
     data_block = (
         '<script type="application/json" id="gallery-data">'
@@ -344,11 +445,12 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
         "{{DATA}}": data_block,
         "{{SCRIPTS}}": scripts,
         "{{ITEM_TOTAL}}": str(len(index["items"])),
+        "{{TOPIC_STATUS}}": topic_status_html(cfg, topic_meta),
         # Help dialog: baked from config so the text stays correct when the
         # content repo, topic name or manifest path are reconfigured.
         "{{TOPIC_NAME}}": escape_html(cfg.topic_name),
         "{{TOPIC_MANIFEST_PATH}}": escape_html(cfg.topic_manifest_path),
-        "{{CONTENT_REPO_URL}}": escape_html(cfg.content_repo_url.removesuffix(".git")),
+        "{{CONTENT_REPO_URL}}": escape_html(public_repo_url(cfg.content_repo_url)),
     }
     for token, value in replacements.items():
         html = html.replace(token, value)
@@ -358,18 +460,17 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts,
     return html
 
 
-def _inline_media(html: str, out_dir: Path, threshold_kb: int = 200) -> str:
+def _inline_media(html: str, out_dir: Path, threshold_kb: int = INLINE_THRESHOLD_KB) -> str:
     """--single-file: data-URI-inline media images under the size threshold."""
-    import re as _re
 
-    def _sub(match: _re.Match) -> str:
+    def _sub(match: re.Match) -> str:
         rel = match.group(1)
         path = out_dir / rel
         if path.is_file() and path.stat().st_size <= threshold_kb * 1024:
             return f'src="{data_uri(path)}"'
         return match.group(0)
 
-    return _re.sub(r'src="(media/[^"]+)"', _sub, html)
+    return re.sub(r'src="(media/[^"]+)"', _sub, html)
 
 
 # --------------------------------------------------------------------------
@@ -377,18 +478,23 @@ def _inline_media(html: str, out_dir: Path, threshold_kb: int = 200) -> str:
 # --------------------------------------------------------------------------
 
 def process_all_images(cfg, sections: list[Section], out_dir: Path, diags: Diagnostics,
-                       counters: dict) -> None:
+                       counters: dict, pillow_logged: list[bool]) -> None:
     media_dir = out_dir / "media"
-    pillow_logged = [False]
+    icon_width = min(cfg.thumbnail_width, ICON_MAX_WIDTH)
     for section in sections:
         if section.icon_src is not None:
             result = process_image(
                 section.icon_src, media_dir, section.slug, diags,
-                generate_thumbnails=False, thumbnail_width=cfg.thumbnail_width,
+                generate_thumbnails=cfg.generate_thumbnails, thumbnail_width=icon_width,
                 pillow_missing_logged=pillow_logged,
             )
             if result:
-                section.icon = result["image"]
+                section.icon = result["thumb"]
+                if result["thumb"] != result["image"]:
+                    section.icon_w = icon_width
+                    section.icon_h = max(1, round(result["image_h"] * icon_width / result["image_w"]))
+                else:
+                    section.icon_w, section.icon_h = result["image_w"], result["image_h"]
         for item in section.items:
             if item.image_src is None:
                 continue
@@ -397,6 +503,7 @@ def process_all_images(cfg, sections: list[Section], out_dir: Path, diags: Diagn
                 generate_thumbnails=cfg.generate_thumbnails,
                 thumbnail_width=cfg.thumbnail_width,
                 pillow_missing_logged=pillow_logged,
+                allow_svg=item.source != "topic",
             )
             if result is None:
                 item.image_src = None
@@ -427,13 +534,20 @@ def finalise_items(cfg, sections: list[Section]) -> None:
             ]))
 
 
-def copy_src(out_dir: Path) -> None:
+def copy_src(out_dir: Path, skip: set[Path] = frozenset()) -> None:
+    """Mirror src/ into the output, minus the template and any `skip` files
+    (the full-size default image ships under media/ at tile size instead)."""
+    skip_resolved = {path.resolve() for path in skip}
+
+    def _ignore(directory, names):
+        return [name for name in names if (Path(directory) / name).resolve() in skip_resolved]
+
     for entry in sorted(SRC_DIR.iterdir(), key=lambda p: p.name):
-        if entry.name == "index.html":
+        if entry.name == "index.html" or entry.resolve() in skip_resolved:
             continue  # template, rendered separately
         dest = out_dir / entry.name
         if entry.is_dir():
-            shutil.copytree(entry, dest, dirs_exist_ok=True)
+            shutil.copytree(entry, dest, dirs_exist_ok=True, ignore=_ignore)
         else:
             shutil.copyfile(entry, dest)
 
@@ -470,7 +584,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # 6. Merge topic items.
     topic_meta = {"enabled": False, "name": cfg.topic_name, "instance": None,
-                  "fetched": False, "count": 0, "dropped_duplicates": 0}
+                  "fetched": False, "count": 0, "dropped_duplicates": 0,
+                  "partial": False, "truncated": False}
     if not args.no_topics:
         curated = [item for section in sections for item in section.items]
         topic_section, topic_meta = merge_topics(cfg, curated, Path(args.topics_snapshot), diags)
@@ -491,7 +606,7 @@ def main(argv: list[str] | None = None) -> int:
     sections = [s for s in sections if s.items]
 
     # Bail out before writing anything if validation failed.
-    if diags.errors or (cfg.strict and diags.warnings):
+    if diags.failed(cfg.strict):
         diags.report(sys.stderr)
         summary = f"{len(diags.errors)} error(s), {len(diags.warnings)} warning(s)"
         if cfg.strict and diags.warnings and not diags.errors:
@@ -504,12 +619,27 @@ def main(argv: list[str] | None = None) -> int:
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
 
-    # 7. Images.
+    # 7. Images: items and section icons, then the default image at tile size.
     counters = {"images": 0, "thumbnails": 0}
-    process_all_images(cfg, sections, out_dir, diags, counters)
-    if diags.errors or (cfg.strict and diags.warnings):
+    pillow_logged = [False]
+    process_all_images(cfg, sections, out_dir, diags, counters, pillow_logged)
+    default_public = derive_default_image(
+        SRC_DIR / default_image_rel, out_dir / "media", diags,
+        generate_thumbnails=cfg.generate_thumbnails, thumbnail_width=cfg.thumbnail_width,
+        pillow_missing_logged=pillow_logged,
+    )
+    if default_public is None and not diags.errors:
+        default_image_rel = FALLBACK_DEFAULT_IMAGE
+        default_public = derive_default_image(
+            SRC_DIR / FALLBACK_DEFAULT_IMAGE, out_dir / "media", diags,
+            generate_thumbnails=False, thumbnail_width=cfg.thumbnail_width,
+            pillow_missing_logged=pillow_logged,
+        )
+    if diags.failed(cfg.strict):
         diags.report(sys.stderr)
+        print("\nbuild failed during image processing", file=sys.stderr)
         return 1
+    default_public = default_public or FALLBACK_DEFAULT_IMAGE
 
     total_items = sum(len(s.items) for s in sections)
     if total_items > 3000 and cfg.cards_per_page == 0:
@@ -521,20 +651,22 @@ def main(argv: list[str] | None = None) -> int:
     # 8. Emit the index.
     ref = cfg.content_repo_ref
     commit = content_commit(content_dir)
-    index = build_index(cfg, sections, topic_meta, ref, commit)
+    index = build_index(cfg, sections, topic_meta, ref, commit, default_public)
     (out_dir / "gallery.json").write_text(
         json.dumps(index, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
-    # 9. Copy src/ + render the page.
-    copy_src(out_dir)
+    # 9. Copy src/ (minus the template and the full-size default image) and
+    #    render the page.
+    skip = {SRC_DIR / default_image_rel} - {SRC_DIR / FALLBACK_DEFAULT_IMAGE}
+    copy_src(out_dir, skip)
     template = (SRC_DIR / "index.html").read_text(encoding="utf-8")
     tag_counts = {t["name"]: t["count"] for t in index["tags"]}
     hosted_html = render_page(
         template, cfg=cfg, index=index, sections=sections, tag_counts=tag_counts,
-        standalone=False, single_file=False, out_dir=out_dir,
-        placeholder_url=default_image_rel,
+        topic_meta=topic_meta, standalone=False, single_file=False, out_dir=out_dir,
+        placeholder_url=default_public,
     )
     (out_dir / "index.html").write_text(hosted_html, encoding="utf-8")
 
@@ -543,20 +675,15 @@ def main(argv: list[str] | None = None) -> int:
         if dist_dir.exists():
             shutil.rmtree(dist_dir)
         dist_dir.mkdir(parents=True)
+        # media/ (item images, icons and the tile-sized default image) is the
+        # standalone file's one sibling.
         media_src = out_dir / "media"
         if media_src.is_dir():
             shutil.copytree(media_src, dist_dir / "media")
-        # The default image ships as a media/ file rather than a data URI:
-        # it may be a large raster, and a data URI would be repeated in every
-        # imageless tile. media/ is already the standalone file's one sibling.
-        default_src = SRC_DIR / default_image_rel
-        standalone_placeholder = f"media/gallery-default{default_src.suffix.lower()}"
-        (dist_dir / "media").mkdir(exist_ok=True)
-        shutil.copyfile(default_src, dist_dir / standalone_placeholder)
         standalone_html = render_page(
             template, cfg=cfg, index=index, sections=sections, tag_counts=tag_counts,
-            standalone=True, single_file=args.single_file, out_dir=dist_dir,
-            placeholder_url=standalone_placeholder,
+            topic_meta=topic_meta, standalone=True, single_file=args.single_file,
+            out_dir=dist_dir, placeholder_url=default_public,
         )
         target = dist_dir / "index.html"
         target.write_text(standalone_html, encoding="utf-8")
@@ -578,11 +705,13 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(diags.warnings)} warnings, {len(diags.notices)} topic/config notices"
     )
     print(f"content: ref={ref} commit={commit or 'unknown'}")
+    print(f"default image: {default_public}")
     print(
         "topic: "
         + (
             f"instance={topic_meta.get('instance') or 'n/a'} fetched={topic_meta.get('fetched')} "
-            f"count={topic_meta.get('count')} dropped_duplicates={topic_meta.get('dropped_duplicates')}"
+            f"count={topic_meta.get('count')} dropped_duplicates={topic_meta.get('dropped_duplicates')} "
+            f"partial={topic_meta.get('partial')} truncated={topic_meta.get('truncated')}"
             if topic_meta.get("enabled")
             else "disabled"
         )

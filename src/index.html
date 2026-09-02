@@ -56,6 +56,7 @@
 </div>
 <footer class="site-footer">
   <p>A fully static gallery — every byte is served from this origin, nothing phones home.</p>
+{{TOPIC_STATUS}}
   <svg class="construction-badge" viewBox="0 0 176 40" width="176" height="40" role="img" aria-label="Under construction — best viewed in any browser">
     <rect x="1" y="1" width="174" height="38" fill="#ffe14d" stroke="#111111" stroke-width="2"/>
     <g transform="translate(6,6)">
@@ -97,7 +98,11 @@ Free Markdown body.</code></pre>
     <section class="help-section">
       <h3>Host your own item via a GitLab topic</h3>
       <p>Any project on this GitLab instance can list itself &#8212; no merge request needed. Under your project&#8217;s <strong>Settings &#8594; General &#8594; Topics</strong>, add the topic <code>{{TOPIC_NAME}}</code>. The project&#8217;s name, description, avatar and other topics become the card, which appears in the gallery&#8217;s subscribed section on the next scheduled build. Projects without an avatar get the gallery default image.</p>
-      <p>For more control, commit a manifest at <code>{{TOPIC_MANIFEST_PATH}}</code> on your default branch, using the same frontmatter format as a curated item &#8212; its fields override the derived metadata, and its body becomes the card body. Remove the topic to leave the gallery.</p>
+      <p>For more control, commit a manifest at <code>{{TOPIC_MANIFEST_PATH}}</code> on your default branch, using the same frontmatter format as a curated item &#8212; its fields override the derived metadata (an <code>image</code> is read from the same directory as the manifest, raster formats only), and its body becomes the card body. Set <code>draft: true</code> in it, or remove the topic, to leave the gallery.</p>
+    </section>
+    <section class="help-section">
+      <h3>Search tips</h3>
+      <p>Searching matches titles, summaries, bodies, tags and section names, ignoring accents and case. Prefix a word with <code>tag:</code>, <code>section:</code> or <code>source:</code> to filter, for example <code>tag:local source:topic</code>. <code>is:featured</code> shows featured items only. Press <code>/</code> to jump to the search box and <code>Esc</code> to clear it.</p>
     </section>
   </div>
 </dialog>

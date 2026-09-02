@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="">
+  <rect width="800" height="600" fill="#2b3a55"/>
+  <circle cx="400" cy="280" r="140" fill="#f2c14e"/>
+  <text x="400" y="520" font-family="sans-serif" font-size="48" text-anchor="middle" fill="#ffffff">Attention</text>
+</svg>

@@ -146,6 +146,33 @@ class FieldValidationTests(unittest.TestCase):
             self.assertEqual(diags.errors, [])
             self.assertTrue(any("added" in w for w in diags.warnings))
 
+    def test_control_characters_in_url_are_errors(self):
+        # Browsers strip tab/newline anywhere and leading C0 controls before
+        # parsing, so these would all resolve to javascript: in the browser.
+        from content import validate_url
+        for bad in (
+            "java\tscript:alert(1)",
+            "java\nscript:alert(1)",
+            "java\rscript:alert(1)",
+            "\x01javascript:alert(1)",
+            "https://example.com/\x7f",
+        ):
+            diags = Diagnostics()
+            self.assertIsNone(validate_url(bad, diags, "x"), repr(bad))
+            self.assertTrue(any("control" in e for e in diags.errors), repr(bad))
+
+    def test_url_scheme_detection_and_relative_paths(self):
+        from content import validate_url
+        for bad in ("JavaScript:alert(1)", "data:text/html,x", "vbscript:x", "//evil.example/x",
+                    "\\\\evil.example/x", "/\\evil.example/x"):
+            diags = Diagnostics()
+            self.assertIsNone(validate_url(bad, diags, "x"), repr(bad))
+            self.assertTrue(diags.errors, repr(bad))
+        for good in ("https://ok.example/a?b=c", "http://ok.example", "../other/", "docs/page:1", "#top"):
+            diags = Diagnostics()
+            self.assertEqual(validate_url(good, diags, "x"), good)
+            self.assertEqual(diags.errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()
