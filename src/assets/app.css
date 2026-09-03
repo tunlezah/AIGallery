@@ -60,6 +60,9 @@
   --counter-text: #a5adb8;
 }
 [data-theme="dark"] { color-scheme: dark; }
+/* An explicit Light choice must pin form controls and scrollbars to light,
+   otherwise the page-level "light dark" hint follows a dark OS. */
+[data-theme="light"] { color-scheme: light; }
 
 /* System resolves ONLY to light or dark — never to GeoCities. */
 @media (prefers-color-scheme: dark) {
@@ -125,6 +128,10 @@
    Base
    ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
+/* Filtering hides tiles with the `hidden` attribute. Author `display` rules
+   (.tile is display:flex) would otherwise beat the UA's [hidden] rule and
+   leave filtered-out tiles on screen. */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -314,6 +321,8 @@ button { font: inherit; color: inherit; }
   color: var(--chip-active-text);
 }
 .rail-section .count { color: inherit; opacity: 0.75; }
+.rail-label { display: inline-flex; align-items: center; gap: 0.35em; min-width: 0; }
+.rail-icon { width: 1.1em; height: 1.1em; object-fit: contain; border-radius: 3px; flex: none; }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip {
@@ -392,6 +401,13 @@ button { font: inherit; color: inherit; }
 }
 [data-theme="geocities"] .section-head h2 { color: #ffff00; }
 .section-count { font-weight: 400; color: var(--muted); font-size: 0.95rem; }
+.section-icon {
+  width: 1.4em; height: 1.4em;
+  object-fit: contain;
+  vertical-align: -0.3em;
+  margin-right: 0.4em;
+  border-radius: 4px;
+}
 [data-theme="geocities"] .section-count { color: #ffffcc; }
 .section-desc { margin: 0 0 1rem; color: var(--muted); max-width: 60ch; }
 [data-theme="geocities"] .section-desc { color: #ffffff; }
@@ -586,6 +602,8 @@ button { font: inherit; color: inherit; }
   font-family: var(--heading-font);
   font-weight: 700;
 }
+.tile-badge-featured { background: var(--chip-active-bg); color: var(--chip-active-text); }
+[data-theme="geocities"] .tile-badge-featured { border-color: #ffff00; }
 
 /* ==========================================================================
    Footer
@@ -598,6 +616,18 @@ button { font: inherit; color: inherit; }
   font-size: 0.85rem;
 }
 [data-theme="geocities"] .site-footer { color: #ffffff; }
+/* Build-time state of the topic feed; a failed feed must not look like an
+   empty one. */
+.topic-status { margin: 0.5rem 0 0; }
+.topic-status code { font-family: var(--mono-font); font-size: 0.9em; }
+.topic-status-warn {
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+}
 .construction-badge { display: none; }
 [data-theme="geocities"] .construction-badge { display: block; margin-top: 0.75rem; }
 

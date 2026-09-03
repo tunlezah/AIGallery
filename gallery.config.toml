@@ -28,5 +28,10 @@ topic_fetch_avatars    = true
 topic_avatar_max_kb    = 512
 topic_manifest_path    = ".ai-gallery/index.md"  # optional per-project enrichment
 topic_exclude          = []             # list of path_with_namespace globs to skip
+topic_allow_namespaces = []             # if non-empty, ONLY projects whose path_with_namespace
+                                        # matches one of these globs (case-insensitive) are used,
+                                        # e.g. ["ml-group/*", "platform/ai-*"]. Set this on any
+                                        # GitLab instance you do not fully control: otherwise
+                                        # anyone who can tag a project gets a card.
 topic_timeout_seconds  = 20             # per request
 topic_budget_seconds   = 120            # overall wall-clock budget for the fetch step

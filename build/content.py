@@ -13,6 +13,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -92,7 +93,9 @@ class Section:
     order: int = 1000
     description: str = ""
     icon_src: Path | None = None
-    icon: str | None = None
+    icon: str | None = None           # public path, filled by images stage
+    icon_w: int = 0
+    icon_h: int = 0
     items: list[Item] = field(default_factory=list)
 
 
@@ -179,23 +182,45 @@ def parse_date(value, diags: Diagnostics, where: str, fieldname: str) -> str | N
 
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
+# ASCII control characters. Browsers strip tab/newline anywhere in a URL and
+# leading C0 controls before parsing, so "java\tscript:" or "\x01javascript:"
+# would reach the browser as javascript: even though no scheme regex sees one.
+CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
 
 def validate_url(value, diags: Diagnostics, where: str) -> str | None:
-    """http(s) or relative path only. Other schemes are a hard error."""
+    """http(s) or relative path only. Other schemes are a hard error.
+
+    The scheme is detected with urllib.parse rather than a regex over the raw
+    string, and any ASCII control character is refused outright, so the
+    browser's URL parser can never resolve a different scheme than the one
+    validated here.
+    """
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
         diags.error(f"{where}: url must be a non-empty string")
         return None
     url = value.strip()
-    match = _SCHEME_RE.match(url)
-    if match:
-        scheme = match.group(0)[:-1].lower()
+    if CONTROL_CHARS_RE.search(url):
+        diags.error(
+            f"{where}: url contains ASCII control characters (tab, newline or C0), "
+            "which browsers strip before parsing; refused"
+        )
+        return None
+    try:
+        scheme = urlsplit(url).scheme.lower()
+    except ValueError as exc:
+        diags.error(f"{where}: url is not parseable: {exc}")
+        return None
+    if scheme:
         if scheme in ("http", "https"):
             return url
         diags.error(f"{where}: url scheme {scheme!r} is not allowed (http(s) or relative path only)")
         return None
-    if url.startswith("//"):
+    # Browsers treat backslashes like slashes here, so "\\host" is also
+    # protocol-relative.
+    if len(url) >= 2 and url[0] in "/\\" and url[1] in "/\\":
         diags.error(f"{where}: protocol-relative urls are not allowed")
         return None
     return url

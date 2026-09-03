@@ -44,6 +44,10 @@ class Config:
     topic_avatar_max_kb: int = 512
     topic_manifest_path: str = ".ai-gallery/index.md"
     topic_exclude: list[str] = field(default_factory=list)
+    # Non-empty = only projects whose path_with_namespace matches one of these
+    # globs (case-insensitive) are used. Essential on any instance you do not
+    # fully control: without it, anyone who can tag a project gets a card.
+    topic_allow_namespaces: list[str] = field(default_factory=list)
     topic_timeout_seconds: int = 20
     topic_budget_seconds: int = 120
 

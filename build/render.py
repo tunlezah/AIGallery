@@ -23,12 +23,16 @@ ALLOWED_ATTRIBUTES = {"a": {"href", "title"}}
 ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Raw HTML in Markdown is disabled at the parser level (html=False) as well
-# as stripped by the sanitiser afterwards.
-_MD = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
+# as stripped by the sanitiser afterwards. CommonMark plus the two GFM
+# extensions the allow-list admits: tables and strikethrough.
+_MD = MarkdownIt(
+    "commonmark", {"html": False, "linkify": False, "typographer": False}
+).enable(["table", "strikethrough"])
 
 # h1/h2 would compete with the page's own heading hierarchy; demote to h3
-# (h6 is not in the allow-list; clamp it to h5).
-_DEMOTE = {"h1": "h3", "h2": "h3", "h6": "h5"}
+# (h6 is not in the allow-list; clamp it to h5). markdown-it renders
+# strikethrough as <s>; the allow-list carries <del> for it.
+_DEMOTE = {"h1": "h3", "h2": "h3", "h6": "h5", "s": "del"}
 
 # Sanitiser output serialises attributes as double-quoted strings, so this
 # matches complete <a ...> open tags without being fooled by '>' in values.

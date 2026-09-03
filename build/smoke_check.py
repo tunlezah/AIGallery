@@ -1,8 +1,9 @@
 """Post-build smoke checks, run by CI after the generator.
 
 Asserts: public/index.html + public/gallery.json exist, the JSON parses,
-items is non-empty, every image/thumb referenced by the index exists on
-disk, and no secret value leaked into public/ or dist/.
+items is non-empty, every image/thumb referenced by the index (and the
+default image) exists on disk, the standalone index exists when a dist
+directory is given, and no secret value leaked into public/ or dist/.
 
 Usage: python build/smoke_check.py [public-dir] [dist-dir]
 Secrets to scan for are read from the environment variable names given in
@@ -50,8 +51,18 @@ def main() -> None:
             rel = item.get(key)
             if rel and not (public / rel).is_file():
                 missing.append(f"{item.get('id')}: {rel}")
+    default_image = (index.get("site") or {}).get("default_image")
+    if default_image and not (public / default_image).is_file():
+        missing.append(f"default image: {default_image}")
     if missing:
         fail("referenced files missing from disk:\n  " + "\n  ".join(missing))
+
+    # dist/ may be the dist root (CI: dist/standalone/index.html) or the
+    # standalone directory itself.
+    if dist.exists():
+        candidates = (dist / "standalone" / "index.html", dist / "index.html")
+        if not any(path.is_file() for path in candidates):
+            fail(f"no standalone index.html under {dist}")
 
     secrets = [os.environ[name] for name in SECRET_ENV_VARS
                if os.environ.get(name) and len(os.environ[name]) >= 8]

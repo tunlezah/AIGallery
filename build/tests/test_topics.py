@@ -1,5 +1,7 @@
-"""Topic merge + soft-failure tests (milestone 6). No network anywhere."""
+"""Topic merge + soft-failure tests. No network anywhere."""
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from content import Diagnostics, Item
 from topics import merge_topics, normalise_url_for_dedupe
 
 FIXTURES = Path(__file__).parent / "fixtures"
+PNG_HEAD = b"\x89PNG\r\n\x1a\n" + b"\0" * 24
 
 
 def make_cfg(**overrides):
@@ -27,6 +30,36 @@ def curated_fixture_items():
         Item(slug="claude", section="models", source="content",
              title="Claude", url="https://claude.com"),
     ]
+
+
+def record(**overrides):
+    base = {
+        "id": 1,
+        "path_with_namespace": "grp/proj",
+        "name": "Proj",
+        "name_with_namespace": "Grp / Proj",
+        "description": "A project.",
+        "web_url": "https://gitlab.example.com/grp/proj",
+        "topics": ["ai-gallery", "tooling"],
+        "created_at": "2026-01-01T00:00:00Z",
+        "last_activity_at": "2026-02-01T00:00:00Z",
+        "avatar_file": None,
+        "image_file": None,
+        "manifest": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def write_snapshot(tmp, projects, **extra):
+    data = {
+        "schema": 1, "topic": "AI-Gallery", "instance": "https://gitlab.example.com",
+        "fetched": True, "truncated": False, "partial": False, "projects": projects,
+    }
+    data.update(extra)
+    path = Path(tmp) / "topics.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
 
 
 class DedupeNormalisationTests(unittest.TestCase):
@@ -56,6 +89,8 @@ class MergeTests(unittest.TestCase):
         )
         self.assertEqual(meta["count"], 3)
         self.assertEqual(meta["dropped_duplicates"], 1)
+        self.assertFalse(meta["partial"])
+        self.assertFalse(meta["truncated"])
         notices = "\n".join(diags.notices)
         self.assertIn("duplicates a curated item's url", notices)
         self.assertIn("archived", notices)
@@ -119,7 +154,6 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(diags.errors, [])
 
     def test_garbage_snapshot_is_soft(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             bad = Path(tmp) / "topics.json"
             bad.write_text("{not json", encoding="utf-8")
@@ -137,6 +171,87 @@ class MergeTests(unittest.TestCase):
         self.assertIsNone(section)
         self.assertFalse(meta["enabled"])
         self.assertEqual(diags.notices, [])
+
+
+class ManifestFieldTests(unittest.TestCase):
+    def _merge(self, tmp, projects, **extra):
+        diags = Diagnostics()
+        section, meta = merge_topics(make_cfg(), [], write_snapshot(tmp, projects, **extra), diags)
+        self.assertEqual(diags.errors, [])
+        self.assertEqual(diags.warnings, [])
+        return section, meta, diags
+
+    def test_draft_manifest_removes_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            section, meta, diags = self._merge(tmp, [record(manifest="---\ndraft: true\n---\nGone.\n")])
+            self.assertIsNone(section)
+            self.assertEqual(meta["count"], 0)
+            self.assertTrue(any("draft" in n for n in diags.notices))
+
+    def test_metadata_fields_override_derived_values(self):
+        manifest = (
+            "---\norder: 5\nadded: 2026-03-03\nupdated: \"2026-04-04\"\nfeatured: true\n---\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            section, _, _ = self._merge(tmp, [record(manifest=manifest)])
+            item = section.items[0]
+            self.assertEqual(item.order, 5)
+            self.assertEqual(item.added, "2026-03-03")
+            self.assertEqual(item.updated, "2026-04-04")
+            self.assertTrue(item.featured)
+            self.assertEqual(item.summary, "A project.")  # untouched fields keep derived values
+
+    def test_bad_manifest_field_types_are_notices(self):
+        manifest = "---\norder: \"ten\"\nfeatured: \"yes\"\nadded: \"not-a-date\"\n---\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            section, _, diags = self._merge(tmp, [record(manifest=manifest)])
+            item = section.items[0]
+            self.assertEqual(item.order, 1000)
+            self.assertFalse(item.featured)
+            self.assertEqual(item.added, "2026-01-01")
+            self.assertTrue(any("order" in n for n in diags.notices))
+            self.assertTrue(any("featured" in n for n in diags.notices))
+            self.assertTrue(any("added" in n for n in diags.notices))
+
+    def test_manifest_image_beats_avatar(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp) / "media" / "1"
+            media.mkdir(parents=True)
+            (media / "avatar.png").write_bytes(PNG_HEAD)
+            (media / "image.png").write_bytes(PNG_HEAD)
+            section, _, _ = self._merge(tmp, [record(avatar_file="media/1/avatar.png", image_file="media/1/image.png")])
+            self.assertEqual(section.items[0].image_src.name, "image.png")
+
+    def test_svg_and_unsafe_media_paths_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp) / "media" / "1"
+            media.mkdir(parents=True)
+            (media / "avatar.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>")
+            section, _, diags = self._merge(tmp, [
+                record(avatar_file="media/1/avatar.svg"),
+                record(id=2, path_with_namespace="grp/other", web_url="https://gitlab.example.com/grp/other",
+                       avatar_file="../../etc/passwd.png"),
+            ])
+            for item in section.items:
+                self.assertIsNone(item.image_src)
+            notices = "\n".join(diags.notices)
+            self.assertIn("SVG", notices)
+            self.assertIn("unsafe", notices)
+
+    def test_partial_and_truncated_flags_surface_in_meta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            section, meta, diags = self._merge(tmp, [record()], partial=True, truncated=True)
+            self.assertIsNotNone(section)
+            self.assertTrue(meta["partial"])
+            self.assertTrue(meta["truncated"])
+            self.assertTrue(any("partial" in n for n in diags.notices))
+            self.assertTrue(any("truncated" in n for n in diags.notices))
+
+    def test_control_characters_in_web_url_are_malformed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            section, meta, diags = self._merge(tmp, [record(web_url="https://gitlab.example.com/x\ny")])
+            self.assertIsNone(section)
+            self.assertTrue(any("malformed" in n for n in diags.notices))
 
 
 if __name__ == "__main__":
