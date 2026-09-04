@@ -32,7 +32,7 @@ import urllib.request
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import load_config  # noqa: E402
+from config import load_config, resolve_api_base  # noqa: E402
 from content import Diagnostics, split_frontmatter  # noqa: E402
 from images import sniff_image_type  # noqa: E402
 
@@ -177,21 +177,6 @@ def write_snapshot(snapshot_dir: Path, topic: str, instance: str | None, fetched
         encoding="utf-8",
     )
     notice(f"wrote {path} (fetched={fetched}, projects={len(projects)}, partial={partial})")
-
-
-def resolve_api_base(cfg) -> tuple[str | None, str]:
-    """Resolution order: topic_api_base -> CI_SERVER_URL -> content_repo_url host."""
-    if cfg.topic_api_base.strip():
-        return cfg.topic_api_base.strip().rstrip("/"), "topic_api_base"
-    ci_server = os.environ.get("CI_SERVER_URL", "").strip()
-    if ci_server:
-        return ci_server.rstrip("/"), "CI_SERVER_URL"
-    if cfg.content_repo_url.strip():
-        parts = urllib.parse.urlsplit(cfg.content_repo_url.strip())
-        if parts.scheme in ("http", "https") and parts.hostname:
-            port = f":{parts.port}" if parts.port else ""
-            return f"{parts.scheme}://{parts.hostname}{port}", "content_repo_url"
-    return None, "unresolvable"
 
 
 # --------------------------------------------------------------------------

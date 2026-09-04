@@ -25,7 +25,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import load_config  # noqa: E402
+from config import load_config, resolve_api_base  # noqa: E402
 from content import Diagnostics, Item, Section, discover  # noqa: E402
 from images import derive_default_image, process_image  # noqa: E402
 from render import (  # noqa: E402
@@ -357,6 +357,105 @@ def public_repo_url(url: str) -> str:
     return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
 
 
+def topic_instance_host(cfg, topic_meta: dict, environ: dict | None = None) -> str:
+    """Host (and port) of the GitLab instance the topic feed reads, for the
+    help dialog; "" when nothing resolves.
+
+    The snapshot's recorded instance wins because it is what the fetch step
+    actually queried; without a snapshot the same resolution order the fetch
+    step uses (topic_api_base -> CI_SERVER_URL -> content_repo_url) applies.
+    """
+    candidates = [topic_meta.get("instance"), resolve_api_base(cfg, environ)[0]]
+    for candidate in candidates:
+        if not isinstance(candidate, str) or not candidate.strip():
+            continue
+        try:
+            parts = urlsplit(candidate.strip())
+            port = parts.port
+        except ValueError:
+            continue
+        if parts.scheme in ("http", "https") and parts.hostname:
+            host = parts.hostname
+            if ":" in host:
+                host = f"[{host}]"
+            return f"{host}:{port}" if port else host
+    return ""
+
+
+def help_slots(cfg, topic_meta: dict, environ: dict | None = None) -> dict[str, str]:
+    """Template slots for the help dialog, baked from configuration.
+
+    Everything the help text states about *this* gallery (repo link, topic
+    name, manifest path, section name, size caps, and the eligibility rules
+    that follow from topic_visibility / topic_include_archived /
+    topic_allow_namespaces) is derived here, so reconfiguring the gallery
+    cannot leave the help stale. All values are HTML-escaped.
+    """
+    esc = escape_html
+    host = topic_instance_host(cfg, topic_meta, environ)
+
+    rules: list[str] = []
+    if cfg.topic_visibility:
+        vis = esc(cfg.topic_visibility)
+        rules.append(
+            f"<li>The project's visibility is <strong>{vis}</strong> &#8212; this gallery "
+            f"lists only {vis} projects.</li>"
+        )
+    else:
+        rules.append(
+            "<li>The gallery's build can see the project: a <strong>public</strong> project "
+            "always qualifies; an internal or private one only when the gallery's "
+            "maintainers gave the build an API token that can read it.</li>"
+        )
+    if not cfg.topic_include_archived:
+        rules.append("<li>The project is not archived.</li>")
+    if cfg.topic_allow_namespaces:
+        globs = ", ".join(f"<code>{esc(glob)}</code>" for glob in cfg.topic_allow_namespaces)
+        rules.append(
+            "<li>The project path is inside a namespace this gallery accepts: "
+            f"{globs}.</li>"
+        )
+
+    return {
+        "{{CONTENT_REPO_URL}}": esc(public_repo_url(cfg.content_repo_url)),
+        "{{TOPIC_NAME}}": esc(cfg.topic_name),
+        "{{TOPIC_MANIFEST_PATH}}": esc(cfg.topic_manifest_path),
+        "{{TOPIC_SECTION_TITLE}}": esc(cfg.topic_section_title),
+        "{{TOPIC_INSTANCE_HOST}}": esc(host) if host else "this GitLab instance",
+        "{{TOPIC_AVATAR_MAX_KB}}": str(int(cfg.topic_avatar_max_kb)),
+        "{{TOPIC_MAX_PROJECTS}}": str(int(cfg.topic_max_projects)),
+        "{{TOPIC_ELIGIBILITY_RULES}}": "\n".join(rules),
+    }
+
+
+# <!--if:flag-->...<!--/if:flag--> keeps its body only when `flag` is on;
+# <!--if:!flag-->...<!--/if:!flag--> only when it is off. Blocks may nest.
+_COND_BLOCK_RE = re.compile(r"<!--if:(!?)([a-z_]+)-->(.*?)<!--/if:\1\2-->", re.DOTALL)
+
+
+def apply_conditional_blocks(html: str, flags: dict[str, bool]) -> str:
+    """Resolve the template's conditional comment blocks against `flags`.
+
+    An unknown flag name is a template bug and raises, so a typo cannot
+    silently ship half a sentence.
+    """
+
+    def _resolve(match: re.Match) -> str:
+        negate, name, body = match.group(1), match.group(2), match.group(3)
+        if name not in flags:
+            raise KeyError(f"template uses unknown conditional flag {name!r}")
+        return body if flags[name] != bool(negate) else ""
+
+    while True:
+        resolved = _COND_BLOCK_RE.sub(_resolve, html)
+        if resolved == html:
+            break
+        html = resolved
+    if "<!--if:" in html or "<!--/if:" in html:
+        raise ValueError("template has an unbalanced conditional block")
+    return html
+
+
 def resolve_default_image(cfg, diags: Diagnostics) -> str:
     """Validate cfg.default_image as a path inside src/; fall back if broken.
 
@@ -447,11 +546,15 @@ def render_page(template: str, *, cfg, index: dict, sections, tag_counts, topic_
         "{{ITEM_TOTAL}}": str(len(index["items"])),
         "{{TOPIC_STATUS}}": topic_status_html(cfg, topic_meta),
         # Help dialog: baked from config so the text stays correct when the
-        # content repo, topic name or manifest path are reconfigured.
-        "{{TOPIC_NAME}}": escape_html(cfg.topic_name),
-        "{{TOPIC_MANIFEST_PATH}}": escape_html(cfg.topic_manifest_path),
-        "{{CONTENT_REPO_URL}}": escape_html(public_repo_url(cfg.content_repo_url)),
+        # content repo, topic name, manifest path or feed scope change.
+        **help_slots(cfg, topic_meta),
     }
+    # The help dialog describes the topic path only when the feature is on
+    # (a --no-topics dev build still documents the deployed gallery), and
+    # mentions strict mode only when warnings really do fail the build.
+    html = apply_conditional_blocks(
+        html, {"topics": bool(cfg.topics_enabled), "strict": bool(cfg.strict)}
+    )
     for token, value in replacements.items():
         html = html.replace(token, value)
 

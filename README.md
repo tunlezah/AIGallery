@@ -80,10 +80,29 @@ resized like any other cover into `media/gallery-default.<width>.webp`; the
 full-size source is not shipped, so an imageless tile costs a few kilobytes
 rather than the whole source file. Every card image is rendered inside a
 fixed 4:3 media box (`object-fit: cover`), so any image size or aspect ratio
-displays at the same standard tile size. The header's **?** button opens a
-help dialog explaining both contribution paths and the search syntax; its
-repo link, topic name and manifest path are baked from the config at build
-time (credentials in the repo URL, if any, are stripped first).
+displays at the same standard tile size.
+
+### The help dialog
+
+The header's **?** button, the footer's *How to get a project listed* link
+and `#help` (or `#help=topic`) at the end of the gallery's URL all open a
+tabbed help dialog: one tab per way in — **Merge request** for curated
+entries, **GitLab topic** for self-listed projects — plus search tips. Each
+path lists what is required and what is optional, with annotated `index.md`
+and manifest templates, what fails the build versus what only warns, and a
+"not showing up?" checklist for topic projects.
+
+Everything the dialog states about *this* gallery is baked from the config
+at build time, so reconfiguring the gallery cannot leave the help stale: the
+content-repo link (credentials stripped), topic name, manifest path, the
+topic section's title, the GitLab instance host (from the topic snapshot,
+else the same resolution order the fetch step uses), the avatar size cap and
+project cap, and the eligibility rules that follow from `topic_visibility`,
+`topic_include_archived` and `topic_allow_namespaces`. Template blocks
+wrapped in `<!--if:flag-->…<!--/if:flag-->` (or `<!--if:!flag-->`) are kept
+or dropped per build: with `topics_enabled = false` the topic tab and every
+mention of the topic path disappear, and the strict-mode note appears only
+when `strict = true`.
 
 Validation is strict where it matters: a missing `title`, a malformed YAML
 block, a disallowed URL, an image path that escapes the item directory, an

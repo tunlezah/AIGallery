@@ -256,6 +256,8 @@
   window.addEventListener('hashchange', function () {
     var raw = window.location.hash.replace(/^#/, '');
     if (raw === lastWrittenHash) { lastWrittenHash = null; return; }
+    var help = helpRequest(raw);
+    if (help !== null) { openHelp(help); }
     setState(readHash());
   });
 
@@ -487,11 +489,13 @@
   })();
 
   /* ---------- dialogs (settings + help share the wiring) ---------- */
+  var NO_DIALOG = { open: function () { }, close: function () { }, isOpen: function () { return false; } };
+
   function wireDialog(dialogId, triggerId, closeId) {
     var dialog = document.getElementById(dialogId);
     var trigger = document.getElementById(triggerId);
     var closeButton = document.getElementById(closeId);
-    if (!dialog || !trigger) { return; }
+    if (!dialog || !trigger) { return NO_DIALOG; }
     var supported = typeof dialog.showModal === 'function';
 
     function isOpen() { return dialog.hasAttribute('open'); }
@@ -501,13 +505,19 @@
     }
 
     function openDialog() {
+      if (isOpen()) { return; }
       if (supported) { dialog.showModal(); }
       else { dialog.setAttribute('open', 'open'); }
-      var first = dialog.querySelector('input:checked') || dialog.querySelector('button, input');
+      /* Land on the checked radio (settings) or the selected tab (help)
+         rather than on the close button. */
+      var first = dialog.querySelector('input:checked')
+        || dialog.querySelector('[role="tab"][aria-selected="true"]')
+        || dialog.querySelector('button, input');
       if (first) { try { first.focus({ preventScroll: true }); } catch (err) { first.focus(); } }
     }
 
     function closeDialog() {
+      if (!isOpen()) { return; }
       if (supported) { dialog.close(); }
       else {
         dialog.removeAttribute('open');
@@ -526,10 +536,88 @@
     });
     /* Escape triggers 'cancel' then 'close' natively; focus returns here. */
     dialog.addEventListener('close', returnFocus);
+    return { open: openDialog, close: closeDialog, isOpen: isOpen };
   }
 
-  wireDialog('settings-dialog', 'settings-button', 'settings-close');
-  wireDialog('help-dialog', 'help-button', 'help-close');
+  var settingsDialog = wireDialog('settings-dialog', 'settings-button', 'settings-close');
+  var helpDialog = wireDialog('help-dialog', 'help-button', 'help-close');
+
+  /* ---------- help dialog: tabs + deep link ---------- */
+  /* WAI-ARIA tabs with automatic activation: click or Left/Right/Home/End
+     selects, one tab in the Tab order (roving tabindex), inactive panels
+     get the hidden attribute. The served HTML shows every panel; this only
+     runs where the dialog can be opened at all (it needs script anyway). */
+  function wireTabs(listId) {
+    var list = document.getElementById(listId);
+    var tabs = list ? Array.prototype.slice.call(list.querySelectorAll('[role="tab"]')) : [];
+    if (!tabs.length) { return { select: function () { return false; } }; }
+    var scroller = document.getElementById('help-body');
+
+    function panelOf(tab) { return document.getElementById(tab.getAttribute('aria-controls')); }
+
+    function select(target, moveFocus) {
+      tabs.forEach(function (tab) {
+        var active = tab === target;
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.setAttribute('tabindex', active ? '0' : '-1');
+        var panel = panelOf(tab);
+        if (panel) { panel.hidden = !active; }
+      });
+      if (scroller) { scroller.scrollTop = 0; }
+      if (moveFocus) { try { target.focus({ preventScroll: true }); } catch (err) { target.focus(); } }
+    }
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener('click', function () { select(tab, false); });
+      tab.addEventListener('keydown', function (event) {
+        var next = null;
+        if (event.key === 'ArrowRight') { next = tabs[(index + 1) % tabs.length]; }
+        else if (event.key === 'ArrowLeft') { next = tabs[(index + tabs.length - 1) % tabs.length]; }
+        else if (event.key === 'Home') { next = tabs[0]; }
+        else if (event.key === 'End') { next = tabs[tabs.length - 1]; }
+        if (next) { event.preventDefault(); select(next, true); }
+      });
+    });
+
+    var initial = tabs.filter(function (tab) { return tab.getAttribute('aria-selected') === 'true'; })[0] || tabs[0];
+    select(initial, false);
+
+    return {
+      /* select('topic') activates #help-tab-topic; unknown names do nothing. */
+      select: function (name) {
+        var tab = document.getElementById('help-tab-' + name);
+        if (!tab || tabs.indexOf(tab) === -1) { return false; }
+        select(tab, false);
+        return true;
+      }
+    };
+  }
+
+  var helpTabs = wireTabs('help-tabs');
+
+  /* "#help" or "#help=<tab>" in the address opens the help dialog on that
+     tab (the footer link uses it, and so can anyone sharing the gallery).
+     The key is not part of the filter state, so the next state write drops
+     it from the hash like any other unknown key. */
+  function helpRequest(raw) {
+    var wanted = null;
+    raw.split('&').forEach(function (pair) {
+      var eq = pair.indexOf('=');
+      var key = eq === -1 ? pair : pair.slice(0, eq);
+      if (key !== 'help') { return; }
+      wanted = '';
+      if (eq !== -1) {
+        try { wanted = decodeURIComponent(pair.slice(eq + 1)); } catch (err) { wanted = ''; }
+      }
+    });
+    return wanted;
+  }
+
+  function openHelp(tabName) {
+    if (settingsDialog.isOpen()) { settingsDialog.close(); }
+    if (tabName) { helpTabs.select(tabName); }
+    helpDialog.open();
+  }
 
   /* ---------- settings: theme / sort / density ---------- */
   function bindRadioGroup(name, current, onChange) {
@@ -566,10 +654,12 @@
   if (sortNow !== (runtime.default_sort || 'order')) { applySort(sortNow); }
 
   /* ---------- boot ---------- */
+  var initialHelp = helpRequest(window.location.hash.replace(/^#/, ''));
   var initial = readHash();
   if (serializeState() !== window.location.hash.replace(/^#/, '')) {
     setState(initial);
   } else {
     applyFilters();
   }
+  if (initialHelp !== null) { openHelp(initialHelp); }
 })();

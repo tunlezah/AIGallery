@@ -12,6 +12,7 @@ import sys
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 @dataclass
@@ -166,3 +167,28 @@ def load_config(
         raise SystemExit(1)
 
     return cfg, notices
+
+
+def resolve_api_base(cfg: Config, environ: dict[str, str] | None = None) -> tuple[str | None, str]:
+    """GitLab API base for the topic feed, and where it came from.
+
+    Resolution order: topic_api_base -> CI_SERVER_URL -> content_repo_url's
+    origin. Shared by the fetch step (which queries it) and the generator
+    (which names the instance in the help dialog), so the two never disagree.
+    """
+    env = os.environ if environ is None else environ
+    if cfg.topic_api_base.strip():
+        return cfg.topic_api_base.strip().rstrip("/"), "topic_api_base"
+    ci_server = env.get("CI_SERVER_URL", "").strip()
+    if ci_server:
+        return ci_server.rstrip("/"), "CI_SERVER_URL"
+    if cfg.content_repo_url.strip():
+        try:
+            parts = urlsplit(cfg.content_repo_url.strip())
+            port = parts.port
+        except ValueError:
+            return None, "unresolvable"
+        if parts.scheme in ("http", "https") and parts.hostname:
+            suffix = f":{port}" if port else ""
+            return f"{parts.scheme}://{parts.hostname}{suffix}", "content_repo_url"
+    return None, "unresolvable"

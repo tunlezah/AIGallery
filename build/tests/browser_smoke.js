@@ -127,6 +127,37 @@ async function exercise(page, label, expectedTiles) {
   await page.click('#help-button');
   await page.waitForTimeout(200);
   check((await page.locator('#help-dialog[open]').count()) === 1, `${label.name}: help dialog opens`);
+  /* Tabbed help: opens on the merge-request path, focus on the selected tab,
+     click and arrow keys swap panels, inactive panels are hidden. */
+  const visiblePanels = async () => page.$$eval('.help-panel', (ps) => ps.filter((p) => !p.hidden && getComputedStyle(p).display !== 'none').map((p) => p.id));
+  check(JSON.stringify(await visiblePanels()) === '["help-panel-mr"]', `${label.name}: help opens on the merge-request panel only (${(await visiblePanels()).join(', ')})`);
+  check(await page.evaluate(() => document.activeElement && document.activeElement.id === 'help-tab-mr'), `${label.name}: focus lands on the selected help tab`);
+  await page.click('#help-tab-topic');
+  check((await page.getAttribute('#help-tab-topic', 'aria-selected')) === 'true'
+    && JSON.stringify(await visiblePanels()) === '["help-panel-topic"]', `${label.name}: clicking a help tab swaps the panel`);
+  const topicText = await page.textContent('#help-panel-topic');
+  check(topicText.includes('gitlab.example.com') && topicText.includes('AI-Gallery') && topicText.includes('Required'),
+    `${label.name}: topic help names the instance, the topic and the requirements`);
+  await page.keyboard.press('ArrowRight');
+  check((await page.getAttribute('#help-tab-search', 'aria-selected')) === 'true'
+    && await page.evaluate(() => document.activeElement.id === 'help-tab-search'), `${label.name}: arrow keys move between help tabs`);
+  await page.keyboard.press('ArrowRight');
+  check((await page.getAttribute('#help-tab-mr', 'aria-selected')) === 'true', `${label.name}: help tabs wrap around`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  check((await page.locator('#help-dialog[open]').count()) === 0, `${label.name}: Escape closes help`);
+  /* The footer link and a #help deep link both open the dialog. */
+  await page.click('.footer-links a[href="#help"]');
+  await page.waitForTimeout(300);
+  check((await page.locator('#help-dialog[open]').count()) === 1, `${label.name}: footer link opens help`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await page.goto('about:blank');
+  await page.goto(label.url + '#help=topic');
+  await page.waitForTimeout(500);
+  check((await page.locator('#help-dialog[open]').count()) === 1
+    && (await page.getAttribute('#help-tab-topic', 'aria-selected')) === 'true', `${label.name}: #help=topic opens help on the topic tab at load`);
+  check(errors.length === 0, `${label.name}: still no console/page errors after the dialog checks${errors.length ? ' -> ' + errors.join(' | ') : ''}`);
   await page.keyboard.press('Escape');
 }
 
