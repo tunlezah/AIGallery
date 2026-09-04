@@ -56,6 +56,7 @@
 </div>
 <footer class="site-footer">
   <p>A fully static gallery — every byte is served from this origin, nothing phones home.</p>
+  <p class="footer-links"><a href="#help">How to get a project listed</a></p>
 {{TOPIC_STATUS}}
   <svg class="construction-badge" viewBox="0 0 176 40" width="176" height="40" role="img" aria-label="Under construction — best viewed in any browser">
     <rect x="1" y="1" width="174" height="38" fill="#ffe14d" stroke="#111111" stroke-width="2"/>
@@ -70,40 +71,163 @@
 </footer>
 <dialog class="app-dialog help-dialog" id="help-dialog" aria-labelledby="help-title">
   <div class="dialog-inner">
-    <div class="dialog-head">
-      <h2 id="help-title">Help: getting into the gallery</h2>
-      <button type="button" class="dialog-close" id="help-close">
-        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <span class="visually-hidden">Close help</span>
-      </button>
+    <div class="help-head">
+      <div class="dialog-head">
+        <h2 id="help-title">Help: getting into the gallery</h2>
+        <button type="button" class="dialog-close" id="help-close">
+          <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="visually-hidden">Close help</span>
+        </button>
+      </div>
+<!--if:topics-->
+      <p class="help-intro">Two ways in. <strong>Merge request:</strong> add a curated entry to the content repository &#8212; for anything with a link; the gallery&#8217;s maintainers review it. <strong>GitLab topic:</strong> tag your own project on {{TOPIC_INSTANCE_HOST}} and it lists itself &#8212; no review, refreshed on every build.</p>
+<!--/if:topics-->
+<!--if:!topics-->
+      <p class="help-intro">Entries are added to the content repository by merge request and reviewed by the gallery&#8217;s maintainers.</p>
+<!--/if:!topics-->
+      <div class="help-tabs" id="help-tabs" role="tablist" aria-label="Help topics">
+        <button type="button" class="help-tab" role="tab" id="help-tab-mr" aria-selected="true" aria-controls="help-panel-mr">Merge request</button>
+<!--if:topics-->
+        <button type="button" class="help-tab" role="tab" id="help-tab-topic" aria-selected="false" aria-controls="help-panel-topic">GitLab topic</button>
+<!--/if:topics-->
+        <button type="button" class="help-tab" role="tab" id="help-tab-search" aria-selected="false" aria-controls="help-panel-search">Search &amp; filters</button>
+      </div>
     </div>
-    <section class="help-section">
-      <h3>Add or edit a curated item</h3>
-      <p>Curated items live in the <a href="{{CONTENT_REPO_URL}}" target="_blank" rel="noopener noreferrer">content repository</a>, not in this site&#8217;s repo. Each top-level directory is a section; a directory one level below it becomes a gallery item when it contains an <code>index.md</code>:</p>
-      <pre><code>tooling/                  &lt;- section
-&#9492;&#9472; my-tool/              &lt;- item
-   &#9500;&#9472; index.md           &lt;- required
-   &#9492;&#9472; cover.png          &lt;- optional image</code></pre>
-      <p><code>index.md</code> is YAML frontmatter plus a Markdown body shown on the card:</p>
-      <pre><code>---
-title: "My Tool"          # required
-url: "https://example.com"
-image: "cover.png"        # omit to use the gallery default image
-tags: ["local", "cli"]
-summary: "One line, up to 200 chars."
+    <div class="help-body" id="help-body">
+      <section class="help-panel" role="tabpanel" id="help-panel-mr" aria-labelledby="help-tab-mr" tabindex="0">
+        <h3>Add a curated entry by merge request</h3>
+        <p>Curated entries live in the <a href="{{CONTENT_REPO_URL}}" target="_blank" rel="noopener noreferrer">content repository</a>, a separate Git repository from this site. Anything with a link can be listed; the gallery&#8217;s maintainers review every change.</p>
+        <ol class="help-steps">
+          <li>Fork or branch the content repository.</li>
+          <li>Pick a <strong>section</strong> &#8212; a top-level directory &#8212; or create one. An optional <code>_section.md</code> gives a section its title, order, description and icon.</li>
+          <li>Inside the section, add one directory for your entry with an <code>index.md</code> in it. The directory name becomes the entry&#8217;s slug (lower-case letters, digits and hyphens) and must be unique within the section.</li>
+          <li>Open a merge request. Once it is merged, the gallery&#8217;s next build validates the entry and shows it.</li>
+        </ol>
+        <pre><code>tooling/                    &lt;- section (top-level directory)
+&#9500;&#9472; _section.md              &lt;- optional: title, order, description, icon
+&#9500;&#9472; icon.png                 &lt;- optional section icon
+&#9492;&#9472; my-tool/                 &lt;- your entry (directory name = slug)
+   &#9500;&#9472; index.md              &lt;- REQUIRED
+   &#9492;&#9472; cover.png             &lt;- optional card image</code></pre>
+        <h4>What goes in <code>index.md</code></h4>
+        <pre><code>---
+title: "My Tool"                # REQUIRED: the card title
+url: "https://example.com"      # optional: link on the title; http(s) or relative
+image: "cover.png"              # optional: file in this directory; omit for the default image
+tags: ["local", "cli"]          # optional: chips and filters
+summary: "One line, 200 chars." # optional: derived from the body if omitted
+order: 10                       # optional: sort weight, lower first (default 1000)
+added: 2026-03-14               # optional: ISO date
+updated: 2026-08-01             # optional: ISO date, shown on the card
+featured: false                 # optional: true adds a Featured badge
+draft: false                    # optional: true leaves the entry out
 ---
-Free Markdown body.</code></pre>
-      <p>To modify an existing item, edit its <code>index.md</code> (or replace its image) and open a merge request on the content repository. To remove one, delete its directory or set <code>draft: true</code>.</p>
-    </section>
-    <section class="help-section">
-      <h3>Host your own item via a GitLab topic</h3>
-      <p>Any project on this GitLab instance can list itself &#8212; no merge request needed. Under your project&#8217;s <strong>Settings &#8594; General &#8594; Topics</strong>, add the topic <code>{{TOPIC_NAME}}</code>. The project&#8217;s name, description, avatar and other topics become the card, which appears in the gallery&#8217;s subscribed section on the next scheduled build. Projects without an avatar get the gallery default image.</p>
-      <p>For more control, commit a manifest at <code>{{TOPIC_MANIFEST_PATH}}</code> on your default branch, using the same frontmatter format as a curated item &#8212; its fields override the derived metadata (an <code>image</code> is read from the same directory as the manifest, raster formats only), and its body becomes the card body. Set <code>draft: true</code> in it, or remove the topic, to leave the gallery.</p>
-    </section>
-    <section class="help-section">
-      <h3>Search tips</h3>
-      <p>Searching matches titles, summaries, bodies, tags and section names, ignoring accents and case. Prefix a word with <code>tag:</code>, <code>section:</code> or <code>source:</code> to filter, for example <code>tag:local source:topic</code>. <code>is:featured</code> shows featured items only. Press <code>/</code> to jump to the search box and <code>Esc</code> to clear it.</p>
-    </section>
+Optional Markdown body, shown on the card behind a More/Less control.</code></pre>
+        <div class="help-table-wrap">
+        <table class="help-table">
+          <thead><tr><th scope="col">Field</th><th scope="col">Shown as</th><th scope="col">Rules</th></tr></thead>
+          <tbody>
+            <tr><td><code>title</code> <span class="help-req">required</span></td><td>Card title</td><td>Non-empty text. A missing title fails the build.</td></tr>
+            <tr><td><code>url</code> <span class="help-opt">optional</span></td><td>Link on the title and in the card footer</td><td><code>http://</code>, <code>https://</code> or a relative path. Any other scheme fails the build.</td></tr>
+            <tr><td><code>image</code> <span class="help-opt">optional</span></td><td>Card image, shown in a fixed 4:3 box</td><td>PNG, JPEG, WebP, GIF or SVG inside the entry&#8217;s directory; any size or aspect ratio. Large rasters are resized. An SVG with scripts, event handlers or external references fails the build. Omit it to get the gallery&#8217;s default image.</td></tr>
+            <tr><td><code>tags</code> <span class="help-opt">optional</span></td><td>Tag chips; filters in the sidebar</td><td>A list or a comma-separated string. Lower-cased; spaces become hyphens.</td></tr>
+            <tr><td><code>summary</code> <span class="help-opt">optional</span></td><td>Search text; the card&#8217;s one-liner</td><td>Up to 200 characters (longer is cut). Derived from the body when omitted.</td></tr>
+            <tr><td><code>order</code> <span class="help-opt">optional</span></td><td>Position in the curated sort</td><td>Integer; lower comes first; default 1000.</td></tr>
+            <tr><td><code>added</code>, <code>updated</code> <span class="help-opt">optional</span></td><td>Date sorts; <code>updated</code> shows in the footer</td><td>ISO dates such as <code>2026-03-14</code>. An invalid date is dropped with a warning.</td></tr>
+            <tr><td><code>featured</code> <span class="help-opt">optional</span></td><td>Featured badge; the <code>is:featured</code> filter</td><td><code>true</code> or <code>false</code>.</td></tr>
+            <tr><td><code>draft</code> <span class="help-opt">optional</span></td><td>Nothing &#8212; the entry is left out</td><td><code>true</code> hides the entry. Drafts are still validated.</td></tr>
+            <tr><td>Markdown body <span class="help-opt">optional</span></td><td>Card text, clamped with More/Less</td><td>CommonMark plus tables and strikethrough. Raw HTML is shown as text; headings become sub-headings.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="help-note"><strong>Fails the build:</strong> a missing title, malformed frontmatter, a link with any scheme other than http(s), an image path outside the entry&#8217;s directory, an SVG with active content, or two directories in one section with the same slug. <strong>Warns only:</strong> a missing image file (the default image is used), unknown fields, invalid dates.<!--if:strict--> This gallery builds in strict mode, so warnings fail the build too.<!--/if:strict--></p>
+        <p>To change an entry, edit its <code>index.md</code> or replace its image and open a merge request. To remove one, delete its directory or set <code>draft: true</code>.</p>
+      </section>
+<!--if:topics-->
+      <section class="help-panel" role="tabpanel" id="help-panel-topic" aria-labelledby="help-tab-topic" tabindex="0">
+        <h3>List your own project with the GitLab topic</h3>
+        <p>Any project on <strong>{{TOPIC_INSTANCE_HOST}}</strong> can list itself without a merge request: on every build the gallery asks GitLab for the projects carrying the topic <code>{{TOPIC_NAME}}</code> and turns each one into a card in the <strong>{{TOPIC_SECTION_TITLE}}</strong> section.</p>
+        <ol class="help-steps">
+          <li>Open your project&#8217;s <strong>Settings &#8594; General</strong> and expand <strong>Naming, topics, avatar</strong>.</li>
+          <li>Add the topic <code>{{TOPIC_NAME}}</code>, spelled exactly like that, and save.</li>
+          <li>Wait for the next gallery build (scheduled, or triggered by the maintainers). The footer of this page says how many tagged projects the last build found.</li>
+        </ol>
+        <h4>Required</h4>
+        <ul class="help-checklist">
+          <li>The project is hosted on {{TOPIC_INSTANCE_HOST}} &#8212; the GitLab instance this gallery reads.</li>
+          <li>The topic <code>{{TOPIC_NAME}}</code> is on the project.</li>
+{{TOPIC_ELIGIBILITY_RULES}}
+          <li>The project is not already a curated entry: a tagged project whose URL or slug matches a curated entry is dropped, and the curated entry wins.</li>
+        </ul>
+        <h4>Optional &#8212; what makes the card</h4>
+        <p>Nothing else is needed. These project settings shape the card:</p>
+        <div class="help-table-wrap">
+        <table class="help-table">
+          <thead><tr><th scope="col">Project setting</th><th scope="col">Shown as</th><th scope="col">Tip</th></tr></thead>
+          <tbody>
+            <tr><td>Name</td><td>Card title</td><td>Keep it short. Two tagged projects with the same name are shown with their namespace.</td></tr>
+            <tr><td>Description</td><td>Summary and card text</td><td>The first 200 characters are used.</td></tr>
+            <tr><td>Avatar</td><td>Card image</td><td>PNG, JPEG, WebP or GIF up to {{TOPIC_AVATAR_MAX_KB}} KB. An SVG avatar is never used; without a usable one the card shows the gallery&#8217;s default image.</td></tr>
+            <tr><td>Other topics</td><td>Tag chips</td><td><code>{{TOPIC_NAME}}</code> itself is not shown as a tag.</td></tr>
+            <tr><td>Project URL</td><td>Card link</td><td>The project&#8217;s own page, unless a manifest says otherwise.</td></tr>
+            <tr><td>Created, last activity</td><td>Added and updated dates</td><td>Used by the date sorts.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <h4>Optional &#8212; a manifest for full control</h4>
+        <p>Commit <code>{{TOPIC_MANIFEST_PATH}}</code> on your default branch, in the same format as a curated <code>index.md</code>. Every field is optional and replaces the value derived from the project:</p>
+        <pre><code>---
+title: "Prompt Forge"           # replaces the project name
+summary: "Prompt versioning."   # replaces the description (200 chars)
+tags: ["prompts", "cli"]        # replaces the tags derived from topics
+image: "cover.png"              # PNG/JPEG/WebP/GIF next to this file; beats the avatar
+url: "https://&lt;instance&gt;/group/project/-/releases"   # must stay on {{TOPIC_INSTANCE_HOST}}
+order: 10                       # position in the curated sort
+added: 2026-03-14
+updated: 2026-08-01
+featured: true                  # adds the Featured badge
+draft: false                    # true removes the project from the gallery
+---
+Markdown body, shown on the card instead of the description.</code></pre>
+        <p class="help-note">The manifest is read from the default branch and may be at most 256 KB. <code>image</code> must be a raster file in the manifest&#8217;s directory or below it, up to {{TOPIC_AVATAR_MAX_KB}} KB &#8212; no SVG, no URLs, no <code>..</code>. The body is sanitised like every other card body.</p>
+        <h4>Leaving the gallery</h4>
+        <p>Remove the topic, or set <code>draft: true</code> in the manifest. The card disappears on the next build.</p>
+        <h4>Not showing up?</h4>
+        <ul class="help-checklist">
+          <li>The gallery has not been rebuilt since you added the topic. New projects appear only after the next build.</li>
+          <li>The topic is misspelled, or the settings page was not saved.</li>
+          <li>The project fails one of the rules under <strong>Required</strong> above.</li>
+          <li>It duplicates a curated entry&#8217;s URL or slug; the curated entry wins.</li>
+          <li>Its manifest sets <code>draft: true</code>.</li>
+          <li>The topic feed was unavailable when the gallery was built (the footer says so), or the list was cut off at {{TOPIC_MAX_PROJECTS}} projects.</li>
+        </ul>
+      </section>
+<!--/if:topics-->
+      <section class="help-panel" role="tabpanel" id="help-panel-search" aria-labelledby="help-tab-search" tabindex="0">
+        <h3>Search, filters and settings</h3>
+        <p>Searching matches titles, summaries, bodies, tags and section names, ignoring accents and case. Filters combine with the search: click a section or a tag chip in the sidebar (or a chip on a card) to narrow the gallery down, and <strong>Clear all filters</strong> to start over.</p>
+        <h4>Search prefixes</h4>
+        <div class="help-table-wrap">
+        <table class="help-table">
+          <tbody>
+            <tr><td><code>tag:local</code></td><td>Only items carrying that tag.</td></tr>
+            <tr><td><code>section:tooling</code></td><td>Only items in that section, by its slug.</td></tr>
+<!--if:topics-->
+            <tr><td><code>source:topic</code></td><td>Only projects discovered via the GitLab topic; <code>source:content</code> for curated entries.</td></tr>
+<!--/if:topics-->
+            <tr><td><code>is:featured</code></td><td>Only featured items.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Prefixes combine with plain words, for example <code>tag:local vector</code>.</p>
+        <h4>Keyboard</h4>
+        <p><code>/</code> jumps to the search box and <code>Esc</code> clears it. In this dialog, <code>&#8592;</code> and <code>&#8594;</code> switch tabs and <code>Esc</code> closes it.</p>
+        <h4>Sharing a view</h4>
+        <p>The address bar carries the current search and filters, so copying the URL shares exactly what you see. Adding <code>#help</code> to the gallery&#8217;s address opens this dialog<!--if:topics-->, and <code>#help=topic</code> opens it on the GitLab topic tab<!--/if:topics-->.</p>
+        <h4>Settings</h4>
+        <p>The gear button sets the theme (System, Light, Dark or GeoCities), the sort order (curated order, title, date added or date updated) and the tile density. Choices are remembered in this browser only.</p>
+      </section>
+    </div>
   </div>
 </dialog>
 <dialog class="app-dialog settings-dialog" id="settings-dialog" aria-labelledby="settings-title">

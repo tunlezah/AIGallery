@@ -12,7 +12,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from content import Item  # noqa: E402
-from generate import public_repo_url, sort_items  # noqa: E402
+from config import Config  # noqa: E402
+from generate import (  # noqa: E402
+    apply_conditional_blocks,
+    help_slots,
+    public_repo_url,
+    sort_items,
+    topic_instance_host,
+)
 
 BUILD = Path(__file__).resolve().parents[1]
 ROOT = BUILD.parent
@@ -90,6 +97,7 @@ class GenerateTests(unittest.TestCase):
             self.assertIn("<code>.ai-gallery/index.md</code>", html)
             self.assertIn("is:featured", html)
             self.assertNotIn("{{", html)  # no template slot left unreplaced
+            self.assertNotIn("<!--if:", html)  # every conditional block resolved
             # draft excluded
             self.assertNotIn("draft-item", (out / "gallery.json").read_text())
             # no topic footer line when topics are skipped
@@ -216,8 +224,9 @@ class GenerateTests(unittest.TestCase):
             proc = run_build(out, snapshot=FIXTURES / "topics-empty.json")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             html = (out / "index.html").read_text()
+            # no section, no rail entry (the help dialog may still name it)
             self.assertNotIn('id="section-subscribed"', html)
-            self.assertNotIn("Subscribed", html)
+            self.assertNotIn('data-section="subscribed"', html)
             self.assertIn("topic-status-warn", html)
             self.assertIn("was unavailable when this build ran", html)
 
@@ -227,7 +236,7 @@ class GenerateTests(unittest.TestCase):
             proc = run_build(out, snapshot=Path(tmp) / "nope.json")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             html = (out / "index.html").read_text()
-            self.assertNotIn("Subscribed", html)
+            self.assertNotIn('data-section="subscribed"', html)
             self.assertIn("topic-status-warn", html)
 
     def test_standalone_build(self):
@@ -296,6 +305,157 @@ class GenerateTests(unittest.TestCase):
                 self.assertNotIn("sekrit-value-123", text, name)
                 self.assertNotIn("deploy:", text, name)
             self.assertIn('href="https://gitlab.example.com/g/content"', (out / "index.html").read_text())
+
+    def test_help_dialog_is_tabbed_and_baked_from_config(self):
+        # A --no-topics build still documents the *deployed* gallery, where
+        # topics are enabled, so the topic tab is present.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "public"
+            proc = run_build(out)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            html = (out / "index.html").read_text()
+            for needle in (
+                'role="tablist"', 'id="help-tab-mr"', 'id="help-tab-topic"', 'id="help-tab-search"',
+                'id="help-panel-mr"', 'id="help-panel-topic"', 'id="help-panel-search"',
+                'class="help-req">required<', 'class="help-opt">optional<',
+                "<strong>Subscribed</strong> section", "up to 512 KB", "cut off at 200 projects",
+                "<li>The project is not archived.</li>", 'href="#help"',
+            ):
+                self.assertIn(needle, html, needle)
+            # defaults: no namespace restriction, no visibility filter, strict off
+            self.assertNotIn("namespace this gallery accepts", html)
+            self.assertIn("an internal or private one only when", html)
+            self.assertNotIn("strict mode", html)
+            # no snapshot: the instance falls back to the content repo's host
+            self.assertIn("Any project on <strong>gitlab.example.com</strong>", html)
+
+    def test_help_dialog_reflects_topic_scope_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "public"
+            proc = run_build(out, env_extra={
+                "GALLERY_TOPIC_ALLOW_NAMESPACES": "ml-group/*, platform/ai-*",
+                "GALLERY_TOPIC_VISIBILITY": "public",
+                "GALLERY_TOPIC_INCLUDE_ARCHIVED": "true",
+                "GALLERY_TOPIC_AVATAR_MAX_KB": "64",
+                "GALLERY_TOPIC_SECTION_TITLE": "Community <picks>",
+            })
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            html = (out / "index.html").read_text()
+            self.assertIn("<code>ml-group/*</code>, <code>platform/ai-*</code>", html)
+            self.assertIn("lists only public projects", html)
+            self.assertNotIn("an internal or private one only when", html)
+            self.assertNotIn("<li>The project is not archived.</li>", html)
+            self.assertIn("up to 64 KB", html)
+            self.assertIn("<strong>Community &lt;picks&gt;</strong> section", html)
+            self.assertNotIn("Community <picks>", html)
+
+    def test_help_dialog_omits_topic_path_when_topics_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "public"
+            proc = run_build(out, env_extra={"GALLERY_TOPICS_ENABLED": "false"})
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            html = (out / "index.html").read_text()
+            for absent in ('id="help-tab-topic"', 'id="help-panel-topic"', "Two ways in",
+                           "source:topic", "#help=topic", "<!--if:", "<!--/if:"):
+                self.assertNotIn(absent, html, absent)
+            for present in ('id="help-tab-mr"', 'id="help-tab-search"', 'id="help-panel-mr"',
+                            "Entries are added to the content repository by merge request"):
+                self.assertIn(present, html, present)
+
+    def test_help_dialog_mentions_strict_mode_only_when_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            content = Path(tmp) / "content" / "models" / "clean"
+            content.mkdir(parents=True)
+            (content / "index.md").write_text('---\ntitle: "Clean"\n---\nBody.\n')
+            for strict, expected in (("true", True), ("false", False)):
+                out = Path(tmp) / f"public-{strict}"
+                proc = subprocess.run(
+                    [sys.executable, str(BUILD / "generate.py"),
+                     "--content-dir", str(Path(tmp) / "content"),
+                     "--out", str(out), "--no-topics"],
+                    capture_output=True, text=True,
+                    env={**BASE_ENV, "GALLERY_STRICT": strict},
+                )
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                html = (out / "index.html").read_text()
+                self.assertEqual("so warnings fail the build too" in html, expected, strict)
+
+    def test_help_dialog_names_instance_from_snapshot(self):
+        # The snapshot records the instance the fetch step actually queried;
+        # it beats the content repo's host.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "public"
+            proc = run_build(out, snapshot=FIXTURES / "topics/topics.json", env_extra={
+                "GALLERY_CONTENT_REPO_URL": "https://code.example.org/g/content.git",
+            })
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            html = (out / "index.html").read_text()
+            self.assertIn("Any project on <strong>gitlab.example.com</strong>", html)
+            self.assertNotIn("<strong>code.example.org</strong>", html)
+            self.assertIn('href="https://code.example.org/g/content"', html)
+
+
+class HelpSlotsTests(unittest.TestCase):
+    def test_instance_host_prefers_snapshot_then_fetch_step_order(self):
+        cfg = Config(content_repo_url="https://gitlab.example.com:8443/g/c.git")
+        self.assertEqual(topic_instance_host(cfg, {"instance": "https://feed.example.net"}, environ={}),
+                         "feed.example.net")
+        self.assertEqual(topic_instance_host(cfg, {}, environ={"CI_SERVER_URL": "https://ci.example.org/"}),
+                         "ci.example.org")
+        self.assertEqual(topic_instance_host(cfg, {"instance": None}, environ={}), "gitlab.example.com:8443")
+        cfg.topic_api_base = "https://api.example.com/"
+        self.assertEqual(topic_instance_host(cfg, {}, environ={"CI_SERVER_URL": "https://ci.example.org"}),
+                         "api.example.com")
+        self.assertEqual(topic_instance_host(Config(content_repo_url="git@host:g/c.git"), {}, environ={}), "")
+        # a malformed snapshot value is skipped, not fatal
+        self.assertEqual(topic_instance_host(Config(), {"instance": "https://[bad"}, environ={}), "")
+
+    def test_slots_are_escaped_and_credential_free(self):
+        cfg = Config(
+            content_repo_url="https://deploy:sekrit@gitlab.example.com/g/c.git",
+            topic_name="AI <Gallery>", topic_allow_namespaces=["a/*", "<b>/*"],
+        )
+        slots = help_slots(cfg, {}, environ={})
+        self.assertEqual(slots["{{CONTENT_REPO_URL}}"], "https://gitlab.example.com/g/c")
+        self.assertEqual(slots["{{TOPIC_NAME}}"], "AI &lt;Gallery&gt;")
+        self.assertIn("<code>a/*</code>, <code>&lt;b&gt;/*</code>", slots["{{TOPIC_ELIGIBILITY_RULES}}"])
+        joined = " ".join(slots.values())
+        self.assertNotIn("sekrit", joined)
+        self.assertNotIn("{{", joined)
+
+    def test_generic_wording_when_no_instance_resolves(self):
+        slots = help_slots(Config(content_repo_url=""), {}, environ={})
+        self.assertEqual(slots["{{TOPIC_INSTANCE_HOST}}"], "this GitLab instance")
+
+    def test_eligibility_rules_follow_config(self):
+        generic = help_slots(Config(), {}, environ={})["{{TOPIC_ELIGIBILITY_RULES}}"]
+        self.assertIn("<strong>public</strong> project always qualifies", generic)
+        self.assertIn("<li>The project is not archived.</li>", generic)
+        self.assertNotIn("namespace", generic)
+        scoped = help_slots(
+            Config(topic_visibility="internal", topic_include_archived=True, topic_allow_namespaces=["ml/*"]),
+            {}, environ={},
+        )["{{TOPIC_ELIGIBILITY_RULES}}"]
+        self.assertIn("lists only internal projects", scoped)
+        self.assertNotIn("archived", scoped)
+        self.assertIn("<code>ml/*</code>", scoped)
+
+
+class ConditionalBlockTests(unittest.TestCase):
+    TEMPLATE = "a<!--if:x-->X<!--if:y-->Y<!--/if:y--><!--/if:x-->b<!--if:!x-->N<!--/if:!x-->"
+
+    def test_keeps_drops_negates_and_nests(self):
+        self.assertEqual(apply_conditional_blocks(self.TEMPLATE, {"x": True, "y": False}), "aXb")
+        self.assertEqual(apply_conditional_blocks(self.TEMPLATE, {"x": True, "y": True}), "aXYb")
+        self.assertEqual(apply_conditional_blocks(self.TEMPLATE, {"x": False, "y": True}), "abN")
+
+    def test_unknown_flag_and_unbalanced_block_raise(self):
+        with self.assertRaises(KeyError):
+            apply_conditional_blocks("<!--if:nope-->x<!--/if:nope-->", {"x": True})
+        with self.assertRaises(ValueError):
+            apply_conditional_blocks("<!--if:x-->x", {"x": True})
+        with self.assertRaises(ValueError):
+            apply_conditional_blocks("<!--if:x-->x<!--/if:y-->", {"x": True, "y": True})
 
 
 class SortTests(unittest.TestCase):

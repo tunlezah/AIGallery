@@ -616,6 +616,10 @@ button { font: inherit; color: inherit; }
   font-size: 0.85rem;
 }
 [data-theme="geocities"] .site-footer { color: #ffffff; }
+.footer-links { margin: 0.35rem 0 0; }
+/* The default link blues vanish on the navy starfield. */
+[data-theme="geocities"] .site-footer a,
+[data-theme="geocities"] .site-footer a:visited { color: #00ffff; }
 /* Build-time state of the topic feed; a failed feed must not look like an
    empty one. */
 .topic-status { margin: 0.5rem 0 0; }
@@ -683,28 +687,83 @@ button { font: inherit; color: inherit; }
 .settings-option { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; cursor: pointer; }
 .settings-option input { accent-color: var(--accent); }
 
-/* Help dialog: wider, scrollable, prose + code samples */
+/* Help dialog: a small page. The head (title, intro, tabs) stays put and
+   the selected panel scrolls underneath it. `display:flex` is scoped to
+   [open] so the closed dialog keeps the UA's display:none. */
 .help-dialog {
-  max-width: 36rem;
-  max-height: min(85vh, 42rem);
-  overflow: auto;
+  max-width: 46rem;
+  max-height: min(88vh, 48rem);
+  overflow: hidden;
 }
-.help-section { margin: 0 0 1rem; }
-.help-section:last-child { margin-bottom: 0; }
-.help-section h3 {
-  margin: 0.8em 0 0.35em;
+.help-dialog[open] { display: flex; flex-direction: column; }
+.help-dialog .dialog-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+.help-head {
+  flex: none;
+  padding: 1rem 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.help-intro { margin: 0 0 0.8rem; font-size: 0.9rem; color: var(--muted); }
+.help-intro strong { color: var(--text); }
+.help-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: -1px; }
+.help-tab {
+  padding: 0.5rem 0.85rem;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+.help-tab:hover { color: var(--text); background: var(--chip-bg); }
+/* --link rather than --accent: GeoCities' magenta accent fails 4.5:1 as
+   text on the pale-yellow surface, its blue link colour does not. */
+.help-tab[aria-selected="true"] { color: var(--link); border-bottom-color: var(--link); }
+[data-theme="geocities"] .help-tab {
+  background: #c0c0c0;
+  color: #000000;
+  border: 2px outset #e0e0e0;
+  border-radius: 0;
   font-family: var(--heading-font);
-  font-size: 1rem;
 }
-.help-section p { margin: 0 0 0.6em; font-size: 0.9rem; }
-.help-section code {
+[data-theme="geocities"] .help-tab[aria-selected="true"] {
+  background: #000080;
+  color: #ffff00;
+  border-style: inset;
+}
+.help-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+.help-panel h3 {
+  margin: 0.9em 0 0.4em;
+  font-family: var(--heading-font);
+  font-size: 1.05rem;
+}
+.help-panel h4 {
+  margin: 1.1em 0 0.35em;
+  font-family: var(--heading-font);
+  font-size: 0.92rem;
+}
+.help-panel p, .help-panel li { font-size: 0.9rem; }
+.help-panel p { margin: 0 0 0.6em; }
+.help-steps, .help-checklist { margin: 0 0 0.8em; padding-left: 1.4rem; }
+.help-steps li, .help-checklist li { margin: 0 0 0.35em; }
+.help-panel code {
   font-family: var(--mono-font);
   font-size: 0.85em;
   background: var(--chip-bg);
   border-radius: 3px;
   padding: 0.05em 0.3em;
 }
-.help-section pre {
+.help-panel pre {
   overflow-x: auto;
   background: var(--chip-bg);
   padding: 0.5rem 0.65rem;
@@ -712,7 +771,39 @@ button { font: inherit; color: inherit; }
   font-size: 0.8rem;
   line-height: 1.45;
 }
-.help-section pre code { background: transparent; padding: 0; }
+.help-panel pre code { background: transparent; padding: 0; }
+.help-note {
+  padding: 0.5rem 0.75rem;
+  background: var(--chip-bg);
+  border-left: 3px solid var(--link);
+  border-radius: 4px;
+}
+.help-table-wrap { overflow-x: auto; margin: 0 0 0.8em; }
+.help-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.help-table th, .help-table td {
+  padding: 0.35em 0.55em;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.help-table th { background: var(--chip-bg); font-weight: 700; }
+.help-table td:first-child { white-space: nowrap; }
+/* required / optional markers next to field names */
+.help-req, .help-opt {
+  display: inline-block;
+  margin-left: 0.25em;
+  padding: 0 0.45em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.help-req { background: var(--chip-active-bg); color: var(--chip-active-text); }
+.help-opt { background: var(--chip-bg); color: var(--chip-text); border: 1px solid var(--border); }
+[data-theme="geocities"] .help-req, [data-theme="geocities"] .help-opt { border-radius: 0; }
 
 /* ==========================================================================
    Responsive: rail becomes a drawer

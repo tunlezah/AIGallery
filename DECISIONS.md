@@ -134,6 +134,29 @@ Measured values (columns, contrast) are at the end.
 - **The help dialog's repo link strips userinfo** before baking; the smoke
   check only knows the token values it is told about, so a token pasted into
   `GALLERY_CONTENT_REPO_URL` would otherwise have been published verbatim.
+- **The help dialog's config-dependent facts are rendered in Python
+  (`help_slots`), not hand-written in the template.** Whether an internal
+  project can appear, whether archived projects are skipped and which
+  namespaces are accepted all follow from `topic_visibility`,
+  `topic_include_archived` and `topic_allow_namespaces`; a sentence in the
+  template about them would be true for exactly one configuration. The
+  allow-list is published (it tells a contributor whether they qualify); the
+  `topic_exclude` deny-list is not (it is the maintainers' call, and naming
+  excluded projects serves nobody).
+- **Template conditionals are HTML comments** (`<!--if:flag-->` …
+  `<!--/if:flag-->`, negatable, nestable, resolved by
+  `apply_conditional_blocks`). The alternative — attribute slots that
+  inject ` hidden` — would have shipped the topic help to galleries that
+  have topics switched off, merely invisible. An unknown flag name raises,
+  so a typo cannot silently drop or duplicate a block. The `topics` flag
+  follows `topics_enabled` in the config, not the `--no-topics` build
+  switch: a developer's offline build still documents the deployed gallery.
+- **The help names the GitLab instance from the topic snapshot first**, then
+  via the same `resolve_api_base` the fetch step uses (moved into
+  `config.py` so both read one implementation). The snapshot records what
+  was actually queried, which is the only truth a contributor needs; when
+  nothing resolves the text falls back to "this GitLab instance" rather
+  than guessing.
 - **Tables and strikethrough are enabled in the Markdown parser.** The
   sanitiser allow-list admitted `table`/`del` from the start while the
   CommonMark preset never produced them, so a table in an item body came
@@ -225,6 +248,32 @@ Measured values (columns, contrast) are at the end.
 - **Search tokens are documented in the help dialog** (`tag:`, `section:`,
   `source:`, `is:featured`, `/`, Escape) because a filter nobody can
   discover is a filter nobody uses.
+- **The help dialog is a tabbed page, not a scroll of paragraphs.** The
+  question a visitor arrives with is "which way in?", so the intro answers
+  it in two sentences and the tabs (Merge request / GitLab topic / Search &
+  filters) let them read one path in full. Tabs follow the WAI-ARIA pattern
+  with automatic activation and roving tabindex (Left/Right/Home/End, wrap
+  around), inactive panels carry `hidden`, and the head (title, intro,
+  tabs) stays put while the panel scrolls (`display:flex` scoped to
+  `.help-dialog[open]` so the closed dialog keeps the UA's `display:none`).
+  The dialog opens with focus on the selected tab rather than the close
+  button. Required/optional is shown twice on purpose: as a badge next to
+  every field in the tables (scan) and as an inline comment in the
+  templates (copy-paste).
+- **`#help` / `#help=<tab>` is read from the hash but never written to it.**
+  The footer link and shared URLs open the dialog on a tab; the filter
+  state then normalises the hash on its next write, exactly as any unknown
+  key was already treated, so the History API stays untouched (it throws
+  on `file://`) and the filter model gains no dialog state.
+- **Selected-tab colour is `--link`, not `--accent`.** GeoCities' magenta
+  accent measures 3.1:1 as text on the pale-yellow surface; its blue link
+  colour measures 9.1:1. Light and Dark use the same value for both tokens,
+  so nothing changes there.
+- **The footer gained a plain "How to get a project listed" link.** A
+  gallery that solicits contributions should say so where a visitor
+  finishes scrolling, not only behind a `?` icon; on GeoCities the default
+  link blues vanish against the navy starfield, so footer links are cyan
+  there (16:1).
 - **The browser smoke test is a developer script, not a pipeline job.** It
   needs Node and a Chromium download, which the disconnected runner cannot
   make; `build/tests/browser_smoke.js` builds the fixtures and asserts the
